@@ -1,6 +1,6 @@
 import React from "react";
 import { Phone, Mail, MapPin, Heart } from "lucide-react";
-import logoImg from "../../assets/logo.png";
+import logoImg from "../../assets/logo2.png";
 
 export default function Footer() {
   return (
@@ -11,11 +11,8 @@ export default function Footer() {
             <img
               src={logoImg}
               alt="Angels of Care Logo"
-              className="h-12 w-auto object-contain"
+              className="h-32 object-contain"
             />
-            <span className="font-serif text-2xl text-beige font-bold">
-              Angels of Care
-            </span>
           </div>
           <p className="text-white/70 max-w-xs">
             Referência em Homecare no Oeste Catarinense, unindo tecnologia e

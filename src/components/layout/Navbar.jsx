@@ -19,7 +19,7 @@ const Navbar = () => {
             <img
               src={logoImg}
               alt="Angels of Care Logo"
-              className="h-12 w-auto object-contain"
+              className="h-24 w-auto object-contain"
             />
 
             <span className="font-serif text-primary font-bold text-xl whitespace-nowrap hidden sm:block">
