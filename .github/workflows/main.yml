@@ -3,7 +3,7 @@ name: Deploy Automático HostGator
 on:
   push:
     branches:
-      - main # Só roda quando der push na main
+      - main 
 
 jobs:
   web-deploy:
