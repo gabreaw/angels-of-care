@@ -5,6 +5,7 @@ import Hero from "./sections/Hero";
 import Services from "./sections/Services";
 import Trust from "./sections/Trust";
 import { MessageCircle } from "lucide-react";
+import FloatingWhatsApp from "./components/ui/FloatingWhatsApp";
 
 export default function App() {
   return (
@@ -17,7 +18,7 @@ export default function App() {
         <section className="py-20 px-4 text-center bg-white">
           <h2 className="text-3xl text-primary mb-6">Pronto para conversar?</h2>
           <a
-            href="https://wa.me/5549999999999"
+            href="https://wa.me/5549984220162"
             target="_blank"
             className="inline-flex items-center gap-2 bg-primary text-white px-8 py-4 rounded-xl font-bold hover:bg-opacity-90 transition-all shadow-lg"
           >
@@ -26,8 +27,8 @@ export default function App() {
           </a>
         </section>
       </main>
-
       <Footer />
+      <FloatingWhatsApp />
     </div>
   );
 }

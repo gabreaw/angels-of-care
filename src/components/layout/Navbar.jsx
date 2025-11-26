@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Menu, X, Phone } from "lucide-react";
-import logoImg from "../../assets/logo.png"; // Verifique se o caminho está certo
+import logoImg from "../../assets/logo.png"; 
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -9,7 +9,6 @@ const Navbar = () => {
     { name: "Início", href: "#inicio" },
     { name: "Serviços", href: "#servicos" },
     { name: "Sobre Nós", href: "#sobre" },
-    { name: "Blog", href: "#" },
   ];
 
   return (
@@ -42,7 +41,7 @@ const Navbar = () => {
 
           <div className="hidden md:flex flex-shrink-0">
             <a
-              href="https://wa.me/5549999999999"
+              href="https://wa.me/5549984220162"
               className="bg-primary hover:bg-[#3A4A3E] text-white px-6 py-2.5 rounded-full font-bold transition-all flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-sm"
             >
               <Phone size={18} />
@@ -75,7 +74,7 @@ const Navbar = () => {
               </a>
             ))}
             <a
-              href="https://wa.me/5549999999999"
+              href="https://wa.me/5549984220162"
               className="w-full mt-4 bg-primary text-white px-6 py-4 rounded-xl font-bold flex items-center justify-center gap-2"
             >
               <Phone size={20} />

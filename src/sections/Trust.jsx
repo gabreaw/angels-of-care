@@ -5,23 +5,23 @@ export default function Trust() {
   const items = [
     {
       icon: Shield,
-      title: "Profissionais Verificados",
-      desc: "Antecedentes criminais checados.",
+      title: "Excelência Técnica e Humana",
+      desc: "Nossos anjos são avaliados não apenas pelo currículo, mas pela empatia, paciência e verdadeira vocação para cuidar.",
     },
     {
       icon: UserCheck,
-      title: "O Fit Perfeito",
-      desc: "Encontramos o perfil ideal para sua família.",
+      title: "Sintonia com a Família",
+      desc: "Entendemos a personalidade de quem será cuidado para indicar um profissional que traga leveza e se adapte à rotina da casa.",
     },
     {
       icon: Clock,
-      title: "Flexibilidade",
-      desc: "Plantões de 12h, 24h ou avulsos.",
+      title: "Qualidade de Vida para Vocês",
+      desc: "Nós cuidamos da rotina difícil para que vocês voltem a ter tempo de qualidade apenas para amar e dar carinho.",
     },
     {
       icon: MapPin,
-      title: "Local (Chapecó)",
-      desc: "Supervisão presencial constante.",
+      title: "Suporte Local e Presencial",
+      desc: "Somos de Chapecó. Nossa proximidade garante agilidade e acompanhamento de perto sempre que você precisar.",
     },
   ];
 

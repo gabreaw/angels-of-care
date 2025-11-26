@@ -22,19 +22,13 @@ export default function Hero() {
 
             <div className="space-y-4 pt-4">
               <a
-                href="https://wa.me/5549999999999"
+                href="https://wa.me/5549984220162"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-block bg-primary hover:bg-[#3A4A3E] text-white font-bold px-8 py-4 rounded-xl transition-all hover:shadow-xl hover:-translate-y-1"
               >
                 Solicitar Orçamento Gratuito
               </a>
-              <div className="flex items-center gap-2 text-primary font-medium">
-                <Star className="w-5 h-5 fill-primary text-primary" />
-                <span className="text-sm">
-                  Mais de 10 anos de experiência em cuidado.
-                </span>
-              </div>
             </div>
           </div>
           <div className="relative h-[400px] md:h-[500px] rounded-[2rem] overflow-hidden shadow-2xl border-4 border-white">

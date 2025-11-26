@@ -1,5 +1,5 @@
 import React from "react";
-import { Heart, Stethoscope, Baby, Accessibility } from "lucide-react";
+import { Heart, Stethoscope, Baby, Building2 } from "lucide-react";
 
 export default function Services() {
   const services = [
@@ -19,9 +19,9 @@ export default function Services() {
       desc: "Apoio especializado para mães e bebês, garantindo noites tranquilas e auxílio nos primeiros cuidados.",
     },
     {
-      icon: Accessibility,
-      title: "Cuidados Especiais (PCDs)",
-      desc: "Atendimento adaptado para pessoas com limitações de mobilidade, com respeito e técnica apurada.",
+      icon: Building2, 
+      title: "Acompanhamento Hospitalar", 
+      desc: "Seu familiar nunca ficará sozinho em internações. Oferecemos presença e suporte no hospital para que você possa descansar tranquilo.",
     },
   ];
 
