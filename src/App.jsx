@@ -1,34 +1,52 @@
 import React from "react";
-import Navbar from "./components/layout/Navbar";
-import Footer from "./components/layout/Footer";
-import Hero from "./sections/Hero";
-import Services from "./sections/Services";
-import Trust from "./sections/Trust";
-import { MessageCircle } from "lucide-react";
-import FloatingWhatsApp from "./components/ui/FloatingWhatsApp";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { HelmetProvider } from "react-helmet-async";
+
+// Páginas Públicas
+import Home from "./pages/Home";
+import CadastroParceiro from "./pages/CadastroParceiro";
+import LoginPage from "./pages/LoginPage";
+
+// Páginas Privadas (Admin)
+import Dashboard from "./pages/Dashboard";
+import AdminListaFuncionarios from "./pages/AdminListaFuncionarios";
+import AdminFuncionarios from "./pages/AdminFuncionarios";
+import AdminDetalhes from "./pages/AdminDetalhes";
+import AdminEditar from "./pages/AdminEditar";
+
+// Importações de Pacientes (ADICIONADO AQUI)
+import AdminPacientes from "./pages/AdminPacientes"; // <--- A Lista
+import AdminPacientesNovo from "./pages/AdminPacientesNovo"; // <--- O Cadastro
+
+import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-paper font-sans text-darkText">
-      <Navbar />
-      <main>
-        <Hero />
-        <Services />
-        <Trust />
-        <section className="py-20 px-4 text-center bg-white">
-          <h2 className="text-3xl text-primary mb-6">Pronto para conversar?</h2>
-          <a
-            href="https://wa.me/5549984220162"
-            target="_blank"
-            className="inline-flex items-center gap-2 bg-primary text-white px-8 py-4 rounded-xl font-bold hover:bg-opacity-90 transition-all shadow-lg"
-          >
-            <MessageCircle className="w-5 h-5" />
-            Chamar no WhatsApp
-          </a>
-        </section>
-      </main>
-      <Footer />
-      <FloatingWhatsApp />
-    </div>
+    <HelmetProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* === ÁREA PÚBLICA === */}
+          <Route path="/" element={<Home />} />
+          <Route path="/seja-parceiro" element={<CadastroParceiro />} />
+          <Route path="/login" element={<LoginPage />} />
+
+          {/* === ÁREA RESTRITA (ADMIN) === */}
+          <Route element={<ProtectedRoute />}>
+            <Route path="/admin" element={<Dashboard />} />
+
+            {/* Gestão de Prestadores */}
+            <Route path="/admin/funcionarios" element={<AdminListaFuncionarios />} />
+            <Route path="/admin/funcionarios/novo" element={<AdminFuncionarios />} />
+            <Route path="/admin/funcionarios/:id" element={<AdminDetalhes />} />
+            <Route path="/admin/funcionarios/:id/editar" element={<AdminEditar />} />
+
+            {/* Gestão de Pacientes (ADICIONADO AQUI) */}
+            <Route path="/admin/pacientes" element={<AdminPacientes />} />
+            <Route path="/admin/pacientes/novo" element={<AdminPacientesNovo />} />
+            
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </HelmetProvider>
   );
 }
