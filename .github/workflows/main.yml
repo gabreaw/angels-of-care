@@ -20,9 +20,13 @@ jobs:
           node-version: "20"
 
       - name: 🔨 Install & Build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: |
           npm install --legacy-peer-deps
           npm run build
+          # Garante que copia o .htaccess da public para a dist se ele não foi
           cp public/.htaccess dist/.htaccess || true
 
       - name: 📂 Sync files
