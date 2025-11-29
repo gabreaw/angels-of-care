@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
-// ADICIONEI 'Edit' AQUI NA LISTA 👇
 import {
   CheckCircle,
   XCircle,
@@ -11,7 +10,6 @@ import {
   Edit,
 } from "lucide-react";
 
-// Bibliotecas para o Contrato
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import { saveAs } from "file-saver";
@@ -55,12 +53,10 @@ export default function AdminDetalhes() {
     }
   }
 
-  // --- FUNÇÃO GERAR CONTRATO ---
   const gerarContrato = async () => {
     if (!prestador) return;
 
     try {
-      // 1. Baixa o modelo
       const { data, error } = await supabase.storage
         .from("templates")
         .download("contrato_v2.docx");
@@ -70,7 +66,6 @@ export default function AdminDetalhes() {
           "Modelo de contrato não encontrado. Verifique o Bucket 'templates'."
         );
 
-      // 2. Lê e prepara o zip
       const content = await data.arrayBuffer();
       const zip = new PizZip(content);
       const doc = new Docxtemplater(zip, {
@@ -78,12 +73,10 @@ export default function AdminDetalhes() {
         linebreaks: true,
       });
 
-      // 3. Monta endereço
       const enderecoCompleto = prestador.logradouro
         ? `${prestador.logradouro}, ${prestador.numero} - ${prestador.bairro}, ${prestador.cidade}/${prestador.estado} (CEP: ${prestador.cep})`
         : prestador.endereco_completo;
 
-      // 4. Preenche as variáveis
       const hoje = new Date();
       const meses = [
         "janeiro",
@@ -104,7 +97,6 @@ export default function AdminDetalhes() {
         RAZAO_SOCIAL: prestador.nome_completo,
         CNPJ: prestador.cnpj || "Não informado",
         ENDERECO: enderecoCompleto,
-        // Variáveis granulares de endereço para o contrato novo
         ENDERECO_RUA: prestador.logradouro || "Rua ...",
         ENDERECO_NUMERO: prestador.numero || "S/N",
         ENDERECO_BAIRRO: prestador.bairro || "Bairro ...",
@@ -127,7 +119,6 @@ export default function AdminDetalhes() {
         } de ${hoje.getFullYear()}`,
       });
 
-      // 5. Gera e baixa
       const blob = doc.getZip().generate({
         type: "blob",
         mimeType:
@@ -151,7 +142,6 @@ export default function AdminDetalhes() {
   return (
     <div className="min-h-screen bg-paper p-8">
       <div className="max-w-4xl mx-auto">
-        {/* Topo e Ações */}
         <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
           <Link
             to="/admin/funcionarios"
@@ -161,23 +151,18 @@ export default function AdminDetalhes() {
           </Link>
 
           <div className="flex gap-2 flex-wrap justify-end">
-            {/* Botão Editar */}
             <Link
               to={`/admin/funcionarios/${id}/editar`}
               className="bg-gray-100 text-darkText border border-gray-300 px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-gray-200 hover:text-primary"
             >
               <Edit size={18} /> Editar
             </Link>
-
-            {/* Botão Contrato */}
             <button
               onClick={gerarContrato}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-blue-700 shadow-md"
             >
               <FileText size={18} /> Gerar Contrato
             </button>
-
-            {/* Botões de Aprovação */}
             {prestador.status === "pendente" && (
               <button
                 onClick={() => atualizarStatus("ativo")}
@@ -204,10 +189,7 @@ export default function AdminDetalhes() {
             )}
           </div>
         </div>
-
-        {/* Card Principal */}
         <div className="bg-white rounded-2xl shadow-lg border border-beige overflow-hidden">
-          {/* Cabeçalho do Perfil */}
           <div className="bg-sage/10 p-6 border-b border-beige flex justify-between items-start">
             <div>
               <h1 className="text-3xl font-serif text-primary font-bold">
@@ -231,7 +213,6 @@ export default function AdminDetalhes() {
           </div>
 
           <div className="p-6 grid md:grid-cols-2 gap-8">
-            {/* Coluna 1: Dados */}
             <div className="space-y-4 text-sm">
               <h3 className="font-bold text-primary border-b border-beige pb-2 text-base">
                 Dados Pessoais & Contato
@@ -297,8 +278,6 @@ export default function AdminDetalhes() {
                 </p>
               </div>
             </div>
-
-            {/* Coluna 2: Documentos */}
             <div className="space-y-4">
               <h3 className="font-bold text-primary border-b border-beige pb-2 text-base">
                 Documentos Anexados
@@ -328,7 +307,6 @@ export default function AdminDetalhes() {
   );
 }
 
-// Componente para baixar arquivos de Bucket Privado (COM A CORREÇÃO DE LINK ASSINADO)
 function DocumentoItem({ nome, urls }) {
   const [links, setLinks] = useState([]);
 
@@ -340,10 +318,9 @@ function DocumentoItem({ nome, urls }) {
       const linksTemp = [];
 
       for (const path of listaUrls) {
-        // ATENÇÃO: Nome do bucket aqui tem que ser 'documentos-prestadores'
         const { data, error } = await supabase.storage
           .from("documentos-prestadores")
-          .createSignedUrl(path, 3600); // Link válido por 1 hora
+          .createSignedUrl(path, 3600); 
 
         if (error) {
           console.error(`Erro ao gerar link para ${path}:`, error);

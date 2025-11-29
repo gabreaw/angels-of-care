@@ -25,12 +25,9 @@ export default function AdminListaFuncionarios() {
     setLoading(false);
   }
 
-  // --- NOVA FUNÇÃO: ALTERNAR STATUS (Switch) ---
   async function toggleStatus(id, statusAtual) {
-    // Se tá ativo, vira inativo. Se tá qualquer outra coisa, vira ativo.
     const novoStatus = statusAtual === "ativo" ? "inativo" : "ativo";
 
-    // Atualiza no Banco
     const { error } = await supabase
       .from("funcionarios")
       .update({ status: novoStatus })
@@ -39,7 +36,6 @@ export default function AdminListaFuncionarios() {
     if (error) {
       alert("Erro ao atualizar status: " + error.message);
     } else {
-      // Atualiza na Tela imediatamente (sem recarregar)
       setFuncionarios(
         funcionarios.map((func) =>
           func.id === id ? { ...func, status: novoStatus } : func
@@ -57,7 +53,6 @@ export default function AdminListaFuncionarios() {
   return (
     <div className="min-h-screen bg-paper p-4 md:p-8">
       <div className="max-w-6xl mx-auto">
-        {/* Cabeçalho */}
         <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
           <div>
             <h1 className="text-3xl font-serif text-primary font-bold">
@@ -75,8 +70,6 @@ export default function AdminListaFuncionarios() {
             Novo Prestador
           </Link>
         </div>
-
-        {/* Busca */}
         <div className="bg-white p-4 rounded-xl shadow-sm border border-beige mb-6 flex items-center gap-3">
           <Search className="text-sage" />
           <input
@@ -87,8 +80,6 @@ export default function AdminListaFuncionarios() {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-
-        {/* Tabela */}
         <div className="bg-white rounded-2xl shadow-lg border border-beige overflow-hidden">
           {loading ? (
             <div className="p-8 text-center text-sage">
@@ -117,7 +108,6 @@ export default function AdminListaFuncionarios() {
                         func.status === "inativo" ? "opacity-60 bg-gray-50" : ""
                       }`}
                     >
-                      {/* Nome com Link */}
                       <td className="p-4">
                         <Link
                           to={`/admin/funcionarios/${func.id}`}
@@ -132,7 +122,6 @@ export default function AdminListaFuncionarios() {
                         )}
                       </td>
 
-                      {/* Função */}
                       <td className="p-4">
                         <span
                           className={`px-3 py-1 rounded-full text-xs font-bold ${
@@ -147,7 +136,6 @@ export default function AdminListaFuncionarios() {
                         </span>
                       </td>
 
-                      {/* Contato */}
                       <td className="p-4 text-sm">
                         <div className="flex items-center gap-2">
                           <Phone size={14} className="text-sage" />
@@ -158,7 +146,6 @@ export default function AdminListaFuncionarios() {
                         </div>
                       </td>
 
-                      {/* --- SWITCH DE ATIVO/INATIVO --- */}
                       <td className="p-4 text-center">
                         <div className="flex flex-col items-center gap-1">
                           <button

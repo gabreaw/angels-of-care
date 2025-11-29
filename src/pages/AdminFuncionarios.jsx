@@ -19,6 +19,8 @@ export default function AdminFuncionarios() {
     nome_completo: "",
     cpf: "",
     rg: "",
+    orgao_emissor: "", 
+    nacionalidade: "Brasileiro(a)", 
     email: "",
     telefone: "",
     estado_civil: "",
@@ -46,30 +48,29 @@ export default function AdminFuncionarios() {
     doc_coren: [],
   });
 
-  // --- MÁSCARAS ---
-  const mascaraCPF = (valor) =>
-    valor
+  const mascaraCPF = (v) =>
+    v
       .replace(/\D/g, "")
       .replace(/(\d{3})(\d)/, "$1.$2")
       .replace(/(\d{3})(\d)/, "$1.$2")
       .replace(/(\d{3})(\d{1,2})/, "$1-$2")
       .replace(/(-\d{2})\d+?$/, "$1");
-  const mascaraCNPJ = (valor) =>
-    valor
+  const mascaraCNPJ = (v) =>
+    v
       .replace(/\D/g, "")
       .replace(/(\d{2})(\d)/, "$1.$2")
       .replace(/(\d{3})(\d)/, "$1.$2")
       .replace(/(\d{3})(\d)/, "$1/$2")
       .replace(/(\d{4})(\d)/, "$1-$2")
       .replace(/(-\d{2})\d+?$/, "$1");
-  const mascaraTelefone = (valor) =>
-    valor
+  const mascaraTelefone = (v) =>
+    v
       .replace(/\D/g, "")
       .replace(/^(\d{2})(\d)/g, "($1) $2")
       .replace(/(\d)(\d{4})$/, "$1-$2")
       .slice(0, 15);
-  const mascaraCEP = (valor) =>
-    valor
+  const mascaraCEP = (v) =>
+    v
       .replace(/\D/g, "")
       .replace(/^(\d{5})(\d)/, "$1-$2")
       .slice(0, 9);
@@ -80,7 +81,8 @@ export default function AdminFuncionarios() {
     if (name === "cnpj") value = mascaraCNPJ(value);
     if (name === "telefone") value = mascaraTelefone(value);
     if (name === "cep") value = mascaraCEP(value);
-    if (name === "rg" || name === "coren_numero") value = value.toUpperCase();
+    if (name === "rg" || name === "coren_numero" || name === "orgao_emissor")
+      value = value.toUpperCase();
     setFormData({ ...formData, [name]: value });
   };
 
@@ -103,8 +105,6 @@ export default function AdminFuncionarios() {
           cep: e.target.value,
         }));
         document.getElementById("numeroInput").focus();
-      } else {
-        alert("CEP não encontrado!");
       }
     } catch (error) {
       console.error(error);
@@ -151,7 +151,9 @@ export default function AdminFuncionarios() {
         cpf: formData.cpf.replace(/\D/g, ""),
         cnpj: formData.cnpj.replace(/\D/g, ""),
         cep: formData.cep.replace(/\D/g, ""),
-        telefone: `+55${formData.telefone.replace(/\D/g, "")}`,
+        telefone: formData.telefone
+          ? `+55${formData.telefone.replace(/\D/g, "")}`
+          : "",
       };
 
       const linksIdentidade = await uploadMultiplos(
@@ -165,7 +167,7 @@ export default function AdminFuncionarios() {
       );
       const linksCoren = await uploadMultiplos(arquivos.doc_coren, "coren");
 
-      const enderecoFormatado = `${formData.logradouro}, ${formData.numero} - ${formData.bairro}, ${formData.cidade}/${formData.estado} (CEP: ${formData.cep})`;
+      const enderecoFormatado = `${formData.logradouro}, ${formData.numero} - ${formData.bairro}, ${formData.cidade}/${formData.estado} (${formData.cep})`;
 
       const { error } = await supabase.from("funcionarios").insert([
         {
@@ -175,7 +177,7 @@ export default function AdminFuncionarios() {
           doc_cartao_cnpj_url: linksCnpj,
           doc_comprovante_endereco_url: linksEndereco,
           doc_coren_url: linksCoren,
-          status: "ativo", // <--- ATENÇÃO: Admin cadastra já como ATIVO
+          status: "ativo",
         },
       ]);
 
@@ -197,9 +199,8 @@ export default function AdminFuncionarios() {
             Cadastro Realizado!
           </h1>
           <p className="text-darkText/70 mb-6">
-            O prestador foi inserido na base com status ATIVO.
+            Prestador inserido com sucesso.
           </p>
-          {/* Botão volta para a Lista Administrativa */}
           <Link
             to="/admin/funcionarios"
             className="bg-primary text-white px-6 py-3 rounded-xl font-bold"
@@ -214,7 +215,6 @@ export default function AdminFuncionarios() {
   return (
     <div className="min-h-screen bg-paper p-8">
       <div className="max-w-4xl mx-auto">
-        {/* Topo Admin */}
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-serif text-primary font-bold">
             Cadastro Manual
@@ -229,7 +229,6 @@ export default function AdminFuncionarios() {
 
         <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-beige">
           <form onSubmit={handleSubmit} className="p-8 space-y-8">
-            {/* Campos idênticos ao Seja Parceiro */}
             <section>
               <h3 className="text-xl font-bold text-primary mb-4">
                 1. Dados Pessoais
@@ -239,33 +238,63 @@ export default function AdminFuncionarios() {
                   name="nome_completo"
                   placeholder="Nome Completo"
                   onChange={handleChange}
-                  required
                   className="input-padrao"
                 />
+
                 <div className="grid grid-cols-2 gap-4">
                   <input
                     name="cpf"
                     value={formData.cpf}
                     placeholder="CPF"
                     onChange={handleChange}
-                    required
                     className="input-padrao"
                   />
-                  <input
-                    name="rg"
-                    value={formData.rg}
-                    placeholder="RG"
-                    onChange={handleChange}
-                    required
-                    className="input-padrao"
-                  />
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      name="rg"
+                      value={formData.rg}
+                      placeholder="RG"
+                      onChange={handleChange}
+                      className="input-padrao"
+                    />
+                    <input
+                      name="orgao_emissor"
+                      value={formData.orgao_emissor}
+                      placeholder="Org. Emissor"
+                      onChange={handleChange}
+                      className="input-padrao"
+                    />
+                  </div>
                 </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <input
+                    name="nacionalidade"
+                    value={formData.nacionalidade}
+                    placeholder="Nacionalidade"
+                    onChange={handleChange}
+                    className="input-padrao"
+                  />
+                  <select
+                    name="estado_civil"
+                    onChange={handleChange}
+                    className="input-padrao bg-white"
+                  >
+                    <option value="">Estado Civil</option>
+                    <option>Solteiro(a)</option>
+                    <option>Casado(a)</option>
+                    <option>Divorciado(a)</option>
+                    <option>Viúvo(a)</option>
+                    <option>União Estável</option>
+                  </select>
+                </div>
+
                 <input
                   name="telefone"
                   value={formData.telefone}
                   placeholder="WhatsApp"
                   onChange={handleChange}
-                  required
                   className="input-padrao"
                 />
                 <input
@@ -273,23 +302,10 @@ export default function AdminFuncionarios() {
                   type="email"
                   placeholder="E-mail"
                   onChange={handleChange}
-                  required
                   className="input-padrao"
                 />
-                <select
-                  name="estado_civil"
-                  onChange={handleChange}
-                  className="input-padrao bg-white md:col-span-2"
-                >
-                  <option value="">Estado Civil</option>
-                  <option>Solteiro(a)</option>
-                  <option>Casado(a)</option>
-                  <option>Divorciado(a)</option>
-                  <option>Viúvo(a)</option>
-                </select>
               </div>
             </section>
-
             <section className="bg-sage/5 p-6 rounded-xl border border-sage/20">
               <h3 className="text-xl font-bold text-primary mb-4 flex items-center gap-2">
                 <MapPin size={20} /> Endereço
@@ -305,7 +321,6 @@ export default function AdminFuncionarios() {
                     placeholder="00000-000"
                     onChange={handleChange}
                     onBlur={buscarCep}
-                    required
                     className="input-padrao"
                   />
                   {loadingCep && (
@@ -322,7 +337,6 @@ export default function AdminFuncionarios() {
                     name="logradouro"
                     value={formData.logradouro}
                     onChange={handleChange}
-                    required
                     className="input-padrao bg-gray-50"
                   />
                 </div>
@@ -335,7 +349,6 @@ export default function AdminFuncionarios() {
                     name="numero"
                     placeholder="Nº"
                     onChange={handleChange}
-                    required
                     className="input-padrao"
                   />
                 </div>
@@ -347,7 +360,6 @@ export default function AdminFuncionarios() {
                     name="bairro"
                     value={formData.bairro}
                     onChange={handleChange}
-                    required
                     className="input-padrao bg-gray-50"
                   />
                 </div>
@@ -384,7 +396,6 @@ export default function AdminFuncionarios() {
                 </div>
               </div>
             </section>
-
             <section className="bg-blue-50/50 p-6 rounded-xl border border-blue-100">
               <h3 className="text-xl font-bold text-primary mb-4 flex items-center gap-2">
                 <CreditCard size={20} /> Dados Bancários & MEI
@@ -411,14 +422,12 @@ export default function AdminFuncionarios() {
                   value={formData.cnpj}
                   placeholder="CNPJ (MEI)"
                   onChange={handleChange}
-                  required
                   className="input-padrao"
                 />
                 <input
                   name="chave_pix"
                   placeholder="Chave PIX"
                   onChange={handleChange}
-                  required
                   className="input-padrao"
                 />
               </div>
@@ -431,7 +440,6 @@ export default function AdminFuncionarios() {
                     name="banco"
                     placeholder="Ex: Nubank"
                     onChange={handleChange}
-                    required
                     className="input-padrao"
                   />
                 </div>
@@ -443,7 +451,6 @@ export default function AdminFuncionarios() {
                     name="agencia"
                     placeholder="0000"
                     onChange={handleChange}
-                    required
                     className="input-padrao"
                   />
                 </div>
@@ -455,7 +462,6 @@ export default function AdminFuncionarios() {
                     name="conta"
                     placeholder="12345-6"
                     onChange={handleChange}
-                    required
                     className="input-padrao"
                   />
                 </div>
@@ -475,10 +481,9 @@ export default function AdminFuncionarios() {
                 </div>
               </div>
             </section>
-
             <section>
               <h3 className="text-xl font-bold text-primary mb-4">
-                4. Documentação (Opcional no Admin)
+                4. Documentação (Opcional)
               </h3>
               <div className="bg-sage/10 p-6 rounded-xl space-y-6 border border-sage/30">
                 <UploadField
@@ -513,7 +518,7 @@ export default function AdminFuncionarios() {
               disabled={loading}
               className="w-full bg-primary hover:bg-[#3A4A3E] text-white font-bold py-5 rounded-xl text-lg shadow-lg transition-all"
             >
-              {loading ? "Salvando Cadastro..." : "Confirmar Cadastro Manual"}
+              {loading ? "Salvando..." : "Confirmar Cadastro Manual"}
             </button>
           </form>
         </div>

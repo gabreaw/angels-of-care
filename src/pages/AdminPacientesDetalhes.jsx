@@ -45,6 +45,7 @@ export default function AdminPacientesDetalhes() {
   return (
     <div className="min-h-screen bg-paper p-8">
       <div className="max-w-5xl mx-auto">
+
         <div className="mb-6">
           <Link
             to="/admin/pacientes"

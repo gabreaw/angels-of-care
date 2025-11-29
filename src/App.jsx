@@ -48,7 +48,6 @@ export default function App() {
 
         <meta name="theme-color" content="#4B5E4F" />
       </Helmet>
-
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Home />} />
