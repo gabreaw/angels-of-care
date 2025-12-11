@@ -14,7 +14,6 @@ export default function AdminPacientes() {
 
   async function fetchPacientes() {
     setLoading(true);
-    // Busca na tabela 'pacientes'
     const { data, error } = await supabase
       .from("pacientes")
       .select("*")
@@ -26,7 +25,6 @@ export default function AdminPacientes() {
     setLoading(false);
   }
 
-  // Filtro de busca (Nome ou Bairro)
   const filtered = pacientes.filter(
     (p) =>
       p.nome_paciente.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -36,7 +34,6 @@ export default function AdminPacientes() {
   return (
     <div className="min-h-screen bg-paper p-4 md:p-8">
       <div className="max-w-6xl mx-auto">
-        {/* Cabeçalho */}
         <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
           <div>
             <h1 className="text-3xl font-serif text-primary font-bold">
@@ -54,8 +51,6 @@ export default function AdminPacientes() {
             Novo Paciente
           </Link>
         </div>
-
-        {/* Busca */}
         <div className="bg-white p-4 rounded-xl shadow-sm border border-beige mb-6 flex items-center gap-3">
           <Search className="text-sage" />
           <input
@@ -66,8 +61,6 @@ export default function AdminPacientes() {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-
-        {/* Grid de Cards */}
         {loading ? (
           <div className="text-center p-8 text-sage">
             Carregando pacientes...
@@ -118,12 +111,13 @@ export default function AdminPacientes() {
                     </div>
                   </div>
                 </div>
-
-                {/* Rodapé do Card (Link para Detalhes - Futuro) */}
                 <div className="mt-6 pt-4 border-t border-dashed border-gray-100 flex justify-end">
-                  <button className="text-sm font-bold text-primary hover:underline">
+                  <Link
+                    to={`/admin/pacientes/${paciente.id}`}
+                    className="text-sm font-bold text-primary hover:underline flex items-center gap-1"
+                  >
                     Ver Prontuário →
-                  </button>
+                  </Link>
                 </div>
               </div>
             ))}

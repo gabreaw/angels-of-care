@@ -1,6 +1,6 @@
 import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { Helmet, HelmetProvider } from "react-helmet-async"; // <--- Importante
+import { Helmet, HelmetProvider } from "react-helmet-async";
 
 // Páginas Públicas
 import Home from "./pages/Home";
@@ -18,6 +18,8 @@ import AdminEditar from "./pages/AdminEditar";
 import AdminPacientes from "./pages/AdminPacientes";
 import AdminPacientesNovo from "./pages/AdminPacientesNovo";
 import AdminPacientesDetalhes from "./pages/AdminPacientesDetalhes";
+import AdminEscalas from "./pages/AdminEscalas";
+import AdminConfirmacaoEscala from "./pages/AdminConfirmacaoEscala";
 
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 
@@ -79,6 +81,11 @@ export default function App() {
             <Route
               path="/admin/pacientes/:id"
               element={<AdminPacientesDetalhes />}
+            />
+            <Route path="/admin/escalas" element={<AdminEscalas />} />
+            <Route
+              path="/admin/escalas/confirmacao"
+              element={<AdminConfirmacaoEscala />}
             />
           </Route>
         </Routes>

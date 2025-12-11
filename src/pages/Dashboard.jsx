@@ -2,6 +2,7 @@ import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { Users, UserPlus, HeartPulse, LogOut } from "lucide-react";
+import { Calendar } from "lucide-react";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -17,7 +18,6 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-paper p-8 flex flex-col items-center">
-      {/* Botão de Sair */}
       <div className="w-full max-w-6xl flex justify-end mb-4">
         <button
           onClick={handleLogout}
@@ -32,9 +32,7 @@ export default function Dashboard() {
       </h1>
       <p className="text-darkText/60 mb-12">Gestão Administrativa</p>
 
-      {/* AJUSTE AQUI: mudei para max-w-6xl e md:grid-cols-3 para caber os 3 cards lado a lado */}
       <div className="grid md:grid-cols-3 gap-6 max-w-6xl w-full">
-        {/* Card 1: Prestadores */}
         <Link
           to="/admin/funcionarios"
           className="bg-white p-8 rounded-2xl shadow-md border border-beige hover:shadow-xl hover:-translate-y-1 transition-all group"
@@ -50,7 +48,6 @@ export default function Dashboard() {
           </p>
         </Link>
 
-        {/* Card 2: Novo Parceiro */}
         <Link
           to="/admin/funcionarios/novo"
           className="bg-white p-8 rounded-2xl shadow-md border border-beige hover:shadow-xl hover:-translate-y-1 transition-all group"
@@ -66,7 +63,6 @@ export default function Dashboard() {
           </p>
         </Link>
 
-        {/* Card 3: Pacientes */}
         <Link
           to="/admin/pacientes"
           className="bg-white p-8 rounded-2xl shadow-md border border-beige hover:shadow-xl hover:-translate-y-1 transition-all group"
@@ -79,6 +75,20 @@ export default function Dashboard() {
           </h2>
           <p className="text-darkText/70">
             Prontuários, endereços e responsáveis familiares.
+          </p>
+        </Link>
+        <Link
+          to="/admin/escalas"
+          className="bg-white p-8 rounded-2xl shadow-md border border-beige hover:shadow-xl hover:-translate-y-1 transition-all group"
+        >
+          <div className="w-16 h-16 bg-purple-50 rounded-full flex items-center justify-center mb-6 group-hover:bg-purple-100 transition-colors">
+            <Calendar className="w-8 h-8 text-purple-600" />
+          </div>
+          <h2 className="text-2xl font-serif text-primary font-bold mb-2">
+            Escalas
+          </h2>
+          <p className="text-darkText/70">
+            Mapa geral de plantões e confirmação de presença.
           </p>
         </Link>
       </div>
