@@ -37,7 +37,6 @@ export default function AdminConfirmacaoEscala() {
     const fim = new Date(inicio);
     fim.setDate(inicio.getDate() + 6); 
 
-    // Format for DB query
     const toISODate = (date) => {
       const yy = date.getFullYear();
       const mm = String(date.getMonth() + 1).padStart(2, "0");
