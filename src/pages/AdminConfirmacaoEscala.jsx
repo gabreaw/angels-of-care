@@ -1,13 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { Link } from "react-router-dom";
-import {
-  ArrowLeft,
-  MessageCircle,
-  CheckCircle,
-  Calendar,
-  Filter,
-} from "lucide-react";
+import { ArrowLeft, MessageCircle, CheckCircle, Calendar } from "lucide-react";
 
 export default function AdminConfirmacaoEscala() {
   const [loading, setLoading] = useState(false);
@@ -16,10 +10,18 @@ export default function AdminConfirmacaoEscala() {
 
   useEffect(() => {
     const hoje = new Date();
-    const diaSemana = hoje.getDay();
+    hoje.setHours(12, 0, 0, 0);
+
+    const diaSemana = hoje.getDay(); 
     const domingo = new Date(hoje);
+
     domingo.setDate(hoje.getDate() - diaSemana);
-    setSemanaInicio(domingo.toISOString().split("T")[0]);
+
+    const year = domingo.getFullYear();
+    const month = String(domingo.getMonth() + 1).padStart(2, "0");
+    const day = String(domingo.getDate()).padStart(2, "0");
+
+    setSemanaInicio(`${year}-${month}-${day}`);
   }, []);
 
   useEffect(() => {
@@ -29,12 +31,22 @@ export default function AdminConfirmacaoEscala() {
   async function fetchEscalasDaSemana() {
     setLoading(true);
 
-    const inicio = new Date(semanaInicio);
-    const fim = new Date(inicio);
-    fim.setDate(inicio.getDate() + 6);
+    const [y, m, d] = semanaInicio.split("-");
+    const inicio = new Date(y, m - 1, d, 12, 0, 0);
 
-    const inicioStr = inicio.toISOString().split("T")[0];
-    const fimStr = fim.toISOString().split("T")[0];
+    const fim = new Date(inicio);
+    fim.setDate(inicio.getDate() + 6); 
+
+    // Format for DB query
+    const toISODate = (date) => {
+      const yy = date.getFullYear();
+      const mm = String(date.getMonth() + 1).padStart(2, "0");
+      const dd = String(date.getDate()).padStart(2, "0");
+      return `${yy}-${mm}-${dd}`;
+    };
+
+    const inicioStr = toISODate(inicio);
+    const fimStr = toISODate(fim);
 
     const { data, error } = await supabase
       .from("plantoes")
@@ -80,25 +92,26 @@ export default function AdminConfirmacaoEscala() {
     setListaAgrupada(Object.values(grupos));
   };
 
-  // --- GERADOR DE TEXTO OTIMIZADO ---
   const gerarLinkWhatsApp = (item) => {
     const { funcionario, plantoes } = item;
 
-    const inicio = new Date(semanaInicio);
+    const [y, m, d] = semanaInicio.split("-");
+    const inicio = new Date(y, m - 1, d, 12, 0, 0);
+
     const fim = new Date(inicio);
     fim.setDate(inicio.getDate() + 6);
+
     const fmtData = (d) => d.toLocaleDateString("pt-BR");
 
-    // Criamos um Array de linhas para garantir a quebra correta
     let linhas = [];
 
-    // Cabeçalho
     linhas.push(
-      `Olá *${
-        funcionario.nome_completo.split(" ")[0]
-      }*, inscrito no CNPJ sob o nº ${funcionario.cnpj || "______________"}`
+      `Olá *${funcionario.nome_completo}*, inscrito no CNPJ sob o nº ${
+        funcionario.cnpj || "______________"
+      }`
     );
-    linhas.push(""); // Linha em branco
+
+    linhas.push("");
     linhas.push(
       `Segue a escala Distribuição de Prestação de Serviços de trabalho para a semana de *${fmtData(
         inicio
@@ -109,14 +122,11 @@ export default function AdminConfirmacaoEscala() {
         inicio
       )} ou informe qualquer ajuste necessário.`
     );
-    linhas.push(""); // Linha em branco
+    linhas.push("");
 
-    // Lista de Plantões
     plantoes.forEach((p) => {
-      // Ajuste de fuso horário para garantir o dia certo
-      const dataPartes = p.data_plantao.split("-"); // YYYY-MM-DD
-      // Cria data sem hora para não sofrer com fuso -3h
-      const dataP = new Date(dataPartes[0], dataPartes[1] - 1, dataPartes[2]);
+      const [pAno, pMes, pDia] = p.data_plantao.split("-");
+      const dataP = new Date(pAno, pMes - 1, pDia, 12, 0, 0);
 
       const diaStr = dataP.toLocaleDateString("pt-BR", {
         day: "2-digit",
@@ -129,8 +139,7 @@ export default function AdminConfirmacaoEscala() {
       linhas.push(`🗓 Dia ${diaStr}:   ${horaIni} as ${horaFim}  ${extraTag}`);
     });
 
-    // Rodapé
-    linhas.push(""); // Linha em branco
+    linhas.push("");
     linhas.push(
       `Sua colaboração é essencial para o bom funcionamento da equipe. Agradeço desde já!`
     );
@@ -140,16 +149,12 @@ export default function AdminConfirmacaoEscala() {
     linhas.push(`Enf. Resp. Técnica`);
     linhas.push(`Coren SC 408648`);
 
-    // Junta tudo com o código oficial de Quebra de Linha (%0A)
     const textoFinal = linhas.join("\n");
     const textoCodificado = encodeURIComponent(textoFinal);
 
-    // --- MODO DE TESTE ATIVADO ---
-    const numeroTeste = "5549991234926"; // SEU NÚMERO AQUI
-    // const numeroReal = funcionario.telefone.replace(/\D/g, '');
+    const numeroReal = funcionario.telefone.replace(/\D/g, "");
 
-    // Usa a API completa que força a abertura do texto
-    return `https://api.whatsapp.com/send?phone=${numeroTeste}&text=${textoCodificado}`;
+    return `https://api.whatsapp.com/send?phone=${numeroReal}&text=${textoCodificado}`;
   };
 
   const marcarComoConfirmado = async (plantoesIds) => {
@@ -193,7 +198,7 @@ export default function AdminConfirmacaoEscala() {
                 type="date"
                 value={semanaInicio}
                 onChange={(e) => setSemanaInicio(e.target.value)}
-                className="font-bold text-primary outline-none"
+                className="font-bold text-primary outline-none bg-transparent"
               />
             </div>
           </div>
@@ -241,12 +246,8 @@ export default function AdminConfirmacaoEscala() {
                             : "bg-gray-50 border-gray-200 text-gray-600"
                         }`}
                       >
-                        {new Date(
-                          p.data_plantao + "T00:00:00"
-                        ).toLocaleDateString("pt-BR", {
-                          day: "2-digit",
-                          month: "2-digit",
-                        })}
+                        {p.data_plantao.split("-")[2]}/
+                        {p.data_plantao.split("-")[1]}
                         {p.is_extra && "*"}
                       </span>
                     ))}

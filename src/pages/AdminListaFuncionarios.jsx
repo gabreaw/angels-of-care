@@ -17,7 +17,7 @@ export default function AdminListaFuncionarios() {
     const { data, error } = await supabase
       .from("funcionarios")
       .select("*")
-      .order("created_at", { ascending: false });
+      .order("nome_completo", { ascending: true });
 
     if (error) console.error("Erro ao buscar:", error);
     else setFuncionarios(data || []);

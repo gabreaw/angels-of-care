@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { Link } from "react-router-dom";
-// ADICIONEI MessageCircle AQUI 👇
 import {
   Calendar as CalIcon,
   ChevronLeft,
@@ -24,12 +23,46 @@ export default function AdminEscalas() {
   const [pacientes, setPacientes] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Inicializa já com horas seguras para evitar problemas de timezone na navegação
   const [viewMode, setViewMode] = useState("month");
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [filtroPaciente, setFiltroPaciente] = useState("todos");
+  const [currentDate, setCurrentDate] = useState(() => {
+    const d = new Date();
+    d.setHours(12, 0, 0, 0);
+    return d;
+  });
 
+  const [filtroPaciente, setFiltroPaciente] = useState("todos");
   const [modalOpen, setModalOpen] = useState(false);
   const [modalDate, setModalDate] = useState(null);
+
+  // --- FUNÇÕES DE DATA BLINDADAS (STRING PURA) ---
+
+  // Gera string YYYY-MM-DD segura a partir de uma data, usando UTC (para queries)
+  const toSecureStringUTC = (dateObj) => {
+    const year = dateObj.getUTCFullYear();
+    const month = String(dateObj.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(dateObj.getUTCDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  // Gera string YYYY-MM-DD segura a partir de uma data, usando local time (para display)
+  const toSecureStringLocal = (dateObj) => {
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+    const day = String(dateObj.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  // Cria data segura ao MEIO-DIA para cálculos, usando UTC
+  const createNoonDate = (year, month, day) => {
+    return new Date(Date.UTC(year, month, day, 12, 0, 0, 0));
+  };
+
+  // Extrai o dia "15" da string "2025-12-15" sem converter para data (Evita erro de fuso)
+  const getDayFromString = (dateString) => {
+    if (!dateString) return "";
+    return parseInt(dateString.split("-")[2], 10);
+  };
 
   useEffect(() => {
     const fetchPacientes = async () => {
@@ -50,11 +83,14 @@ export default function AdminEscalas() {
     setLoading(true);
 
     let start, end;
+    // Sempre clonar e garantir meio-dia para cálculos de navegação
     const curr = new Date(currentDate);
+    curr.setHours(12, 0, 0, 0);
 
     if (viewMode === "month") {
-      start = new Date(curr.getFullYear(), curr.getMonth(), 1);
-      end = new Date(curr.getFullYear(), curr.getMonth() + 1, 0);
+      // Do dia 1 ao último dia do mês
+      start = createNoonDate(curr.getFullYear(), curr.getMonth(), 1);
+      end = createNoonDate(curr.getFullYear(), curr.getMonth() + 1, 0);
     } else if (viewMode === "week") {
       const day = curr.getDay();
       start = new Date(curr);
@@ -66,8 +102,8 @@ export default function AdminEscalas() {
       end = new Date(curr);
     }
 
-    const startStr = start.toISOString().split("T")[0];
-    const endStr = end.toISOString().split("T")[0];
+    const startStr = toSecureStringUTC(start);
+    const endStr = toSecureStringUTC(end);
 
     let query = supabase
       .from("plantoes")
@@ -90,7 +126,18 @@ export default function AdminEscalas() {
     const { data, error } = await query;
 
     if (error) console.error("Erro:", error);
-    else setPlantoes(data || []);
+    else {
+      // Adiciona displayDate para cada plantao, convertendo UTC para local
+      const plantoesComDisplayDate = (data || []).map(p => {
+        const utcDate = new Date(p.data_plantao);
+        const displayDate = toSecureStringLocal(utcDate);
+        return {
+          ...p,
+          displayDate
+        };
+      });
+      setPlantoes(plantoesComDisplayDate);
+    }
 
     setLoading(false);
   }
@@ -109,6 +156,7 @@ export default function AdminEscalas() {
 
   const handlePrev = () => {
     const newDate = new Date(currentDate);
+    newDate.setHours(12, 0, 0, 0);
     if (viewMode === "month") newDate.setMonth(newDate.getMonth() - 1);
     else if (viewMode === "week") newDate.setDate(newDate.getDate() - 7);
     else newDate.setDate(newDate.getDate() - 1);
@@ -117,13 +165,18 @@ export default function AdminEscalas() {
 
   const handleNext = () => {
     const newDate = new Date(currentDate);
+    newDate.setHours(12, 0, 0, 0);
     if (viewMode === "month") newDate.setMonth(newDate.getMonth() + 1);
     else if (viewMode === "week") newDate.setDate(newDate.getDate() + 7);
     else newDate.setDate(newDate.getDate() + 1);
     setCurrentDate(newDate);
   };
 
-  const handleToday = () => setCurrentDate(new Date());
+  const handleToday = () => {
+    const d = new Date();
+    d.setHours(12, 0, 0, 0);
+    setCurrentDate(d);
+  };
 
   const openDayModal = (dateStr) => {
     setModalDate(dateStr);
@@ -216,15 +269,16 @@ export default function AdminEscalas() {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
 
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
+    // Cria dias baseados no meio-dia para garantir estabilidade
+    const firstDay = createNoonDate(year, month, 1);
+    const lastDay = createNoonDate(year, month + 1, 0);
     const daysInMonth = lastDay.getDate();
     const startDayOfWeek = firstDay.getDay();
 
     const daysArray = [];
     for (let i = 0; i < startDayOfWeek; i++) daysArray.push(null);
     for (let i = 1; i <= daysInMonth; i++)
-      daysArray.push(new Date(year, month, i));
+      daysArray.push(createNoonDate(year, month, i));
 
     return (
       <div className="grid grid-cols-7 gap-px bg-beige border border-beige rounded-xl overflow-hidden shadow-sm">
@@ -236,15 +290,18 @@ export default function AdminEscalas() {
             {d}
           </div>
         ))}
-        {daysArray.map((date, idx) => {
-          if (!date)
+        {daysArray.map((dateObj, idx) => {
+          if (!dateObj)
             return <div key={idx} className="bg-gray-50 min-h-[100px]"></div>;
 
-          const dateStr = date.toISOString().split("T")[0];
+          // STRING IS KING: Usamos a string para tudo (filtro e exibição)
+          const dateStr = toSecureStringLocal(dateObj);
+
           const plantoesDoDia = plantoes.filter(
-            (p) => p.data_plantao === dateStr
+            (p) => p.displayDate === dateStr
           );
-          const isToday = dateStr === new Date().toISOString().split("T")[0];
+
+          const isToday = dateStr === toSecureStringLocal(new Date());
 
           return (
             <div
@@ -262,7 +319,8 @@ export default function AdminEscalas() {
                       : "text-gray-400"
                   }`}
                 >
-                  {date.getDate()}
+                  {/* AQUI É O PULO DO GATO: Não usamos dateObj.getDate(). Usamos a string! */}
+                  {getDayFromString(dateStr)}
                 </span>
                 <Maximize2
                   size={12}
@@ -289,30 +347,35 @@ export default function AdminEscalas() {
 
   const renderListView = () => {
     const grouped = plantoes.reduce((acc, p) => {
-      acc[p.data_plantao] = acc[p.data_plantao] || [];
-      acc[p.data_plantao].push(p);
+      acc[p.displayDate] = acc[p.displayDate] || [];
+      acc[p.displayDate].push(p);
       return acc;
     }, {});
 
     const daysToShow = [];
     const start = new Date(currentDate);
+    start.setHours(12, 0, 0, 0); // Meio-dia
+
     if (viewMode === "week") {
       start.setDate(start.getDate() - start.getDay());
       for (let i = 0; i < 7; i++) {
         const d = new Date(start);
         d.setDate(start.getDate() + i);
-        daysToShow.push(d.toISOString().split("T")[0]);
+        daysToShow.push(toSecureStringLocal(d));
       }
     } else {
-      daysToShow.push(currentDate.toISOString().split("T")[0]);
+      daysToShow.push(toSecureStringLocal(currentDate));
     }
 
     return (
       <div className="space-y-6">
         {daysToShow.map((dataStr) => {
-          const dateObj = new Date(dataStr + "T00:00:00");
+          // Cria objeto data seguro só para formatar o título (Semana, Dia da semana)
+          const [ano, mes, dia] = dataStr.split("-");
+          const dateObj = new Date(ano, mes - 1, dia, 12, 0, 0); // Força meio-dia
+
           const list = grouped[dataStr] || [];
-          const isToday = dataStr === new Date().toISOString().split("T")[0];
+          const isToday = dataStr === toSecureString(new Date());
 
           return (
             <div
@@ -332,7 +395,8 @@ export default function AdminEscalas() {
                   {dateObj.toLocaleDateString("pt-BR", { weekday: "long" })}
                 </span>
                 <span className="text-gray-400 font-normal">
-                  | {dateObj.toLocaleDateString("pt-BR")}
+                  | {getDayFromString(dataStr)}/{dateObj.getMonth() + 1}/
+                  {dateObj.getFullYear()}
                 </span>
                 {isToday && (
                   <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
@@ -362,11 +426,17 @@ export default function AdminEscalas() {
   const DayDetailsModal = () => {
     if (!modalOpen || !modalDate) return null;
 
-    const plantoesModal = plantoes.filter((p) => p.data_plantao === modalDate);
-    const diaFormatado = new Date(modalDate + "T00:00:00").toLocaleDateString(
-      "pt-BR",
-      { weekday: "long", day: "2-digit", month: "long" }
-    );
+    const plantoesModal = plantoes.filter((p) => p.displayDate === modalDate);
+
+    // Parse seguro para o título do modal
+    const [ano, mes, dia] = modalDate.split("-");
+    const dateObj = new Date(ano, mes - 1, dia, 12, 0, 0);
+
+    const diaFormatado = dateObj.toLocaleDateString("pt-BR", {
+      weekday: "long",
+      day: "2-digit",
+      month: "long",
+    });
 
     return (
       <div
