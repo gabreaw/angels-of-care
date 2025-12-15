@@ -26,7 +26,6 @@ jobs:
         run: |
           npm install --legacy-peer-deps
           npm run build
-          # Garante que copia o .htaccess da public para a dist se ele não foi
           cp public/.htaccess dist/.htaccess || true
 
       - name: 📂 Sync files
