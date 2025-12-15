@@ -352,7 +352,6 @@ export default function AdminPacientesDetalhes() {
                 <h3 className="text-lg font-bold text-primary mb-4 flex items-center gap-2">
                   <Calendar size={20} /> Agendar Plantão
                 </h3>
-
                 <form onSubmit={addPlantao} className="space-y-4">
                   <div>
                     <label className="label-mini">Funcionário</label>
