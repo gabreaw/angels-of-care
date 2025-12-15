@@ -256,7 +256,6 @@ export default function AdminEscalas() {
   const renderMonthView = () => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
-
     const firstDay = createNoonDate(year, month, 1);
     const lastDay = createNoonDate(year, month + 1, 0);
     const daysInMonth = lastDay.getDate();
