@@ -7,11 +7,11 @@ export default function Hero() {
       id="inicio"
       className="relative bg-gradient-to-br from-sage/20 via-paper to-beige/30 py-20 px-4 sm:px-6 lg:px-8"
     >
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-[1400px] mx-auto">
         <div className="grid md:grid-cols-2 gap-12 items-center">
           <div className="space-y-6">
             <h1 className="text-4xl md:text-5xl lg:text-6xl text-primary leading-tight">
-              Cuidado que conforta, <br />
+              Cuidado que conforta,
               presença que acolhe.
             </h1>
             <p className="text-lg text-darkText/80 font-sans leading-relaxed">
