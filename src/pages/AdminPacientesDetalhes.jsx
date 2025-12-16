@@ -15,6 +15,10 @@ import {
   CheckSquare,
   Calendar,
   Clock,
+  Paperclip,
+  Upload,
+  Edit, // <--- Importado ícone de edição
+  X,
 } from "lucide-react";
 
 export default function AdminPacientesDetalhes() {
@@ -24,12 +28,15 @@ export default function AdminPacientesDetalhes() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("geral");
 
+  // Estado para o Modal de Edição de Paciente
+  const [editModalOpen, setEditModalOpen] = useState(false);
+
   const [historico, setHistorico] = useState([]);
   const [medicamentos, setMedicamentos] = useState([]);
   const [sinais, setSinais] = useState([]);
   const [evolucoes, setEvolucoes] = useState([]);
   const [plantoes, setPlantoes] = useState([]);
-
+  const [uploading, setUploading] = useState(false);
   const [listaFuncionarios, setListaFuncionarios] = useState([]);
 
   useEffect(() => {
@@ -97,6 +104,36 @@ export default function AdminPacientesDetalhes() {
     setLoading(false);
   }
 
+  // --- FUNÇÃO PARA ATUALIZAR DADOS DO PACIENTE ---
+  const atualizarPaciente = async (e) => {
+    e.preventDefault();
+    const form = e.target;
+
+    const updates = {
+      nome_paciente: form.nome.value,
+      cpf_paciente: form.cpf.value,
+      data_nascimento: form.nascimento.value,
+      grau_dependencia: form.grau.value,
+      diagnostico: form.diagnostico.value,
+      cuidados_especificos: form.cuidados.value,
+      endereco_completo: form.endereco.value,
+      nome_responsavel: form.responsavel.value,
+      telefone_responsavel: form.telefone.value,
+    };
+
+    const { error } = await supabase
+      .from("pacientes")
+      .update(updates)
+      .eq("id", id);
+
+    if (error) {
+      alert("Erro ao atualizar: " + error.message);
+    } else {
+      setPaciente({ ...paciente, ...updates });
+      setEditModalOpen(false); // Fecha o modal
+    }
+  };
+
   const addHistorico = async (e) => {
     e.preventDefault();
     const form = e.target;
@@ -161,10 +198,45 @@ export default function AdminPacientesDetalhes() {
 
   const addEvolucao = async (e) => {
     e.preventDefault();
+    setUploading(true);
     const form = e.target;
+
+    const funcId = form.funcionario_id.value;
+    const funcionarioSelecionado = listaFuncionarios.find(
+      (f) => f.id == funcId
+    );
+    const nomeProfissional = funcionarioSelecionado
+      ? funcionarioSelecionado.nome_completo
+      : "Desconhecido";
+
+    const file = form.anexo.files[0];
+    let arquivoUrl = null;
+
+    if (file) {
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
+      const filePath = `${id}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("evolucoes")
+        .upload(filePath, file);
+
+      if (uploadError) {
+        alert("Erro ao enviar imagem: " + uploadError.message);
+        setUploading(false);
+        return;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from("evolucoes")
+        .getPublicUrl(filePath);
+
+      arquivoUrl = urlData.publicUrl;
+    }
+
     const novo = {
       paciente_id: id,
-      profissional_nome: form.profissional.value,
+      profissional_nome: nomeProfissional,
       turno: form.turno.value,
       texto_evolucao: form.texto.value,
       diurese_presente: form.diurese.checked,
@@ -172,13 +244,23 @@ export default function AdminPacientesDetalhes() {
       aspiracao_tqt: form.aspiracao.checked,
       mudanca_decubito: form.decubito.checked,
       higiene_realizada: form.higiene.checked,
+      arquivo_url: arquivoUrl,
     };
-    const { data } = await supabase.from("evolucoes").insert([novo]).select();
-    if (data) {
+
+    const { data, error } = await supabase
+      .from("evolucoes")
+      .insert([novo])
+      .select();
+
+    if (error) {
+      alert("Erro ao salvar evolução: " + error.message);
+    } else if (data) {
       setEvolucoes([data[0], ...evolucoes]);
       form.reset();
     }
+    setUploading(false);
   };
+
   const addPlantao = async (e) => {
     e.preventDefault();
     const form = e.target;
@@ -232,9 +314,20 @@ export default function AdminPacientesDetalhes() {
           >
             <ArrowLeft size={20} /> Voltar
           </Link>
-          <h1 className="text-2xl font-serif text-primary font-bold hidden md:block">
-            {paciente.nome_paciente}
-          </h1>
+
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-serif text-primary font-bold hidden md:block">
+              {paciente.nome_paciente}
+            </h1>
+            {/* BOTÃO DE EDITAR */}
+            <button
+              onClick={() => setEditModalOpen(true)}
+              className="bg-white hover:bg-gray-100 text-primary p-2 rounded-full shadow border border-beige transition-all"
+              title="Editar Dados do Paciente"
+            >
+              <Edit size={18} />
+            </button>
+          </div>
         </div>
 
         <div className="flex gap-2 border-b border-beige mb-6 overflow-x-auto pb-1">
@@ -342,6 +435,212 @@ export default function AdminPacientesDetalhes() {
                   </a>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+        {activeTab === "evolucao" && (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+            <div className="xl:col-span-1">
+              <div className="bg-white rounded-2xl shadow border border-beige p-6 sticky top-6">
+                <h3 className="text-lg font-bold text-primary mb-6 flex items-center gap-2 border-b border-beige pb-4">
+                  <FileText size={20} /> Nova Evolução
+                </h3>
+                <form onSubmit={addEvolucao} className="space-y-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="label-mini mb-1">Profissional</label>
+                      <select
+                        name="funcionario_id"
+                        className="input-mini bg-white w-full h-10"
+                        required
+                      >
+                        <option value="">Selecione...</option>
+                        {listaFuncionarios.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.nome_completo}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="label-mini mb-1">Turno</label>
+                      <select
+                        name="turno"
+                        className="input-mini bg-white w-full h-10"
+                      >
+                        <option>Diurno</option>
+                        <option>Noturno</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="label-mini mb-1 font-bold text-darkText">
+                      Descrição Detalhada
+                    </label>
+                    <textarea
+                      name="texto"
+                      placeholder="Descreva o plantão, intercorrências e observações..."
+                      className="w-full p-4 rounded-xl border border-gray-300 text-sm h-96 focus:border-primary focus:ring-1 focus:ring-primary outline-none resize-none leading-relaxed shadow-inner"
+                      required
+                    ></textarea>
+                  </div>
+
+                  <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 border-dashed">
+                    <label className="label-mini flex items-center gap-2 mb-2 text-blue-800 font-bold">
+                      <Paperclip size={16} /> Anexar Documento / Foto
+                    </label>
+                    <input
+                      type="file"
+                      name="anexo"
+                      accept="image/*, application/pdf"
+                      className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 transition-colors cursor-pointer"
+                    />
+                  </div>
+
+                  <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                    <p className="text-xs font-bold text-sage uppercase mb-3 tracking-wider">
+                      Procedimentos Realizados:
+                    </p>
+                    <div className="flex flex-wrap gap-4">
+                      {[
+                        { name: "diurese", label: "Diurese" },
+                        { name: "evacuacao", label: "Evacuação" },
+                        { name: "aspiracao", label: "Aspiração TQT" },
+                        { name: "decubito", label: "Mudança Decúbito" },
+                        { name: "higiene", label: "Higiene" },
+                      ].map((proc) => (
+                        <label
+                          key={proc.name}
+                          className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded-lg border border-gray-200 hover:border-primary transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            name={proc.name}
+                            className="w-4 h-4 accent-primary rounded cursor-pointer"
+                          />
+                          <span className="text-sm text-darkText font-medium">
+                            {proc.label}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button
+                    disabled={uploading}
+                    className="w-full bg-primary hover:bg-[#3A4A3E] text-white font-bold py-4 rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex justify-center items-center gap-2 text-base"
+                  >
+                    {uploading ? (
+                      <span className="animate-pulse">Enviando...</span>
+                    ) : (
+                      <>
+                        <Plus size={20} /> Salvar Evolução no Prontuário
+                      </>
+                    )}
+                  </button>
+                </form>
+              </div>
+            </div>
+            <div className="xl:col-span-1 space-y-6">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-lg font-bold text-darkText">
+                  Histórico Recente
+                </h3>
+                <span className="text-xs font-bold bg-sage/20 text-primary px-3 py-1 rounded-full">
+                  {evolucoes.length} registros
+                </span>
+              </div>
+
+              {evolucoes.map((evo) => (
+                <div
+                  key={evo.id}
+                  className="bg-white p-6 rounded-2xl shadow-sm border border-beige relative group hover:shadow-md transition-shadow"
+                >
+                  <div className="flex justify-between items-start mb-4 border-b border-gray-50 pb-3">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-sm ${
+                          evo.turno === "Noturno"
+                            ? "bg-indigo-500"
+                            : "bg-orange-400"
+                        }`}
+                      >
+                        {evo.turno === "Noturno" ? "N" : "D"}
+                      </div>
+                      <div>
+                        <span className="block text-sm font-bold text-darkText">
+                          {evo.profissional_nome}
+                        </span>
+                        <span className="text-xs text-darkText/50 font-medium">
+                          {new Date(evo.data_registro).toLocaleString("pt-BR", {
+                            day: "2-digit",
+                            month: "long",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() =>
+                        deletarItem(
+                          "evolucoes",
+                          evo.id,
+                          setEvolucoes,
+                          evolucoes
+                        )
+                      }
+                      className="text-gray-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-full transition-all"
+                      title="Excluir registro"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+
+                  <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 mb-4">
+                    <p className="text-darkText/80 text-sm whitespace-pre-wrap leading-relaxed font-sans">
+                      {evo.texto_evolucao}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    {evo.arquivo_url && (
+                      <a
+                        href={evo.arquivo_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 bg-blue-50 hover:bg-blue-100 text-blue-800 px-4 py-3 rounded-xl text-sm font-bold transition-colors border border-blue-100 w-full"
+                      >
+                        <div className="bg-white p-1 rounded-full">
+                          <Paperclip size={14} />
+                        </div>
+                        Visualizar Documento Anexado
+                      </a>
+                    )}
+
+                    <div className="flex flex-wrap gap-2">
+                      {evo.diurese_presente && (
+                        <Tag label="Diurese" color="blue" />
+                      )}
+                      {evo.evacuacao_presente && (
+                        <Tag label="Evacuação" color="brown" />
+                      )}
+                      {evo.aspiracao_tqt && (
+                        <Tag label="Aspiração" color="red" />
+                      )}
+                      {evo.mudanca_decubito && (
+                        <Tag label="Decúbito" color="green" />
+                      )}
+                      {evo.higiene_realizada && (
+                        <Tag label="Higiene" color="teal" />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -513,139 +812,8 @@ export default function AdminPacientesDetalhes() {
             </div>
           </div>
         )}
-        {activeTab === "evolucao" && (
-          <div className="grid lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1">
-              <div className="bg-white rounded-2xl shadow border border-beige p-6 sticky top-6">
-                <h3 className="text-lg font-bold text-primary mb-4 flex items-center gap-2">
-                  <FileText size={20} /> Nova Evolução
-                </h3>
-                <form onSubmit={addEvolucao} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      name="profissional"
-                      placeholder="Profissional"
-                      className="input-mini"
-                      required
-                    />
-                    <select name="turno" className="input-mini bg-white">
-                      <option>Diurno</option>
-                      <option>Noturno</option>
-                    </select>
-                  </div>
-                  <textarea
-                    name="texto"
-                    placeholder="Descreva o plantão..."
-                    className="w-full p-3 rounded-lg border border-gray-300 text-sm h-32 focus:border-primary outline-none resize-none"
-                    required
-                  ></textarea>
-                  <div className="space-y-2 bg-gray-50 p-3 rounded-lg text-sm">
-                    <p className="text-xs font-bold text-sage uppercase mb-2">
-                      Procedimentos:
-                    </p>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        name="diurese"
-                        className="accent-primary"
-                      />{" "}
-                      Diurese
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        name="evacuacao"
-                        className="accent-primary"
-                      />{" "}
-                      Evacuação
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        name="aspiracao"
-                        className="accent-primary"
-                      />{" "}
-                      Aspiração TQT
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        name="decubito"
-                        className="accent-primary"
-                      />{" "}
-                      Mudança Decúbito
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        name="higiene"
-                        className="accent-primary"
-                      />{" "}
-                      Higiene
-                    </label>
-                  </div>
-                  <button className="w-full bg-primary hover:bg-[#3A4A3E] text-white font-bold py-3 rounded-xl transition-all shadow-md">
-                    Salvar Evolução
-                  </button>
-                </form>
-              </div>
-            </div>
-            <div className="lg:col-span-2 space-y-4">
-              {evolucoes.map((evo) => (
-                <div
-                  key={evo.id}
-                  className="bg-white p-6 rounded-2xl shadow-sm border border-beige relative group"
-                >
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
-                          evo.turno === "Noturno"
-                            ? "bg-indigo-100 text-indigo-800"
-                            : "bg-orange-100 text-orange-800"
-                        }`}
-                      >
-                        {evo.turno}
-                      </span>
-                      <span className="text-sm font-bold text-darkText">
-                        {evo.profissional_nome}
-                      </span>
-                    </div>
-                    <span className="text-xs text-darkText/50">
-                      {new Date(evo.data_registro).toLocaleString("pt-BR")}
-                    </span>
-                  </div>
-                  <p className="text-darkText/80 text-sm whitespace-pre-wrap leading-relaxed mb-4">
-                    {evo.texto_evolucao}
-                  </p>
-                  <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-100">
-                    {evo.diurese_presente && (
-                      <Tag label="Diurese" color="blue" />
-                    )}
-                    {evo.evacuacao_presente && (
-                      <Tag label="Evacuação" color="brown" />
-                    )}
-                    {evo.aspiracao_tqt && <Tag label="Aspiração" color="red" />}
-                    {evo.mudanca_decubito && (
-                      <Tag label="Decúbito" color="green" />
-                    )}
-                    {evo.higiene_realizada && (
-                      <Tag label="Higiene" color="teal" />
-                    )}
-                  </div>
-                  <button
-                    onClick={() =>
-                      deletarItem("evolucoes", evo.id, setEvolucoes, evolucoes)
-                    }
-                    className="absolute top-4 right-4 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+
+        {/* --- ABA SINAIS --- */}
         {activeTab === "sinais" && (
           <div className="bg-white rounded-2xl shadow border border-beige p-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
@@ -755,6 +923,8 @@ export default function AdminPacientesDetalhes() {
             </div>
           </div>
         )}
+
+        {/* --- ABA PRONTUÁRIO/MEDICAMENTOS --- */}
         {activeTab === "prontuario" && (
           <div className="grid lg:grid-cols-2 gap-6">
             <div className="bg-white rounded-2xl shadow border border-beige p-6">
@@ -907,10 +1077,137 @@ export default function AdminPacientesDetalhes() {
         )}
       </div>
 
+      {/* --- MODAL DE EDIÇÃO DE PACIENTE --- */}
+      {editModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl border border-beige max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center p-6 border-b border-gray-100">
+              <h2 className="text-xl font-bold text-primary flex items-center gap-2">
+                <Edit size={20} /> Editar Paciente
+              </h2>
+              <button
+                onClick={() => setEditModalOpen(false)}
+                className="text-gray-400 hover:text-red-500 transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <form onSubmit={atualizarPaciente} className="p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="label-mini">Nome Completo</label>
+                  <input
+                    name="nome"
+                    defaultValue={paciente.nome_paciente}
+                    className="input-mini"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label-mini">CPF</label>
+                  <input
+                    name="cpf"
+                    defaultValue={paciente.cpf_paciente}
+                    className="input-mini"
+                  />
+                </div>
+                <div>
+                  <label className="label-mini">Data de Nascimento</label>
+                  <input
+                    name="nascimento"
+                    type="date"
+                    defaultValue={paciente.data_nascimento}
+                    className="input-mini"
+                  />
+                </div>
+                <div>
+                  <label className="label-mini">Grau de Dependência</label>
+                  <select
+                    name="grau"
+                    defaultValue={paciente.grau_dependencia}
+                    className="input-mini bg-white"
+                  >
+                    <option>Grau I</option>
+                    <option>Grau II</option>
+                    <option>Grau III</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="label-mini">Endereço Completo</label>
+                <input
+                  name="endereco"
+                  defaultValue={paciente.endereco_completo}
+                  className="input-mini"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="label-mini">Diagnóstico Principal</label>
+                <input
+                  name="diagnostico"
+                  defaultValue={paciente.diagnostico}
+                  className="input-mini"
+                />
+              </div>
+
+              <div>
+                <label className="label-mini">Cuidados Específicos</label>
+                <textarea
+                  name="cuidados"
+                  defaultValue={paciente.cuidados_especificos}
+                  className="input-mini h-24 resize-none"
+                />
+              </div>
+
+              <div className="bg-sage/5 p-4 rounded-xl space-y-3 border border-sage/20">
+                <h4 className="font-bold text-sage text-xs uppercase">
+                  Contato do Responsável
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="label-mini">Nome do Responsável</label>
+                    <input
+                      name="responsavel"
+                      defaultValue={paciente.nome_responsavel}
+                      className="input-mini"
+                    />
+                  </div>
+                  <div>
+                    <label className="label-mini">Telefone (WhatsApp)</label>
+                    <input
+                      name="telefone"
+                      defaultValue={paciente.telefone_responsavel}
+                      className="input-mini"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setEditModalOpen(false)}
+                  className="flex-1 py-3 font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button className="flex-1 py-3 font-bold bg-primary text-white rounded-xl shadow-md hover:bg-[#3A4A3E] transition-all">
+                  Salvar Alterações
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <style>{`
-        .input-mini { width: 100%; padding: 6px 10px; border-radius: 6px; border: 1px solid #ddd; font-size: 0.85rem; outline: none; }
+        .input-mini { width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid #ddd; font-size: 0.9rem; outline: none; }
         .input-mini:focus { border-color: #4B5E4F; }
-        .label-mini { font-size: 0.65rem; font-weight: bold; color: #4B5E4F; display: block; margin-bottom: 2px; }
+        .label-mini { font-size: 0.7rem; font-weight: bold; color: #4B5E4F; display: block; margin-bottom: 4px; }
         .btn-mini { padding: 6px 12px; border-radius: 6px; font-size: 0.85rem; font-weight: bold; transition: all 0.2s; }
         .btn-mini:hover { opacity: 0.9; transform: translateY(-1px); }
       `}</style>

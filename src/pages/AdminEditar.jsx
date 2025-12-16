@@ -10,6 +10,8 @@ import {
   Briefcase,
   FileText,
   UploadCloud,
+  Trash2, 
+  Eye, 
 } from "lucide-react";
 
 export default function AdminEditar() {
@@ -126,13 +128,25 @@ export default function AdminEditar() {
     if (name === "cep") value = mascaraCEP(value);
     if (name === "rg" || name === "coren_numero" || name === "orgao_emissor")
       value = value.toUpperCase();
-
     setFormData({ ...formData, [name]: value });
   };
 
   const handleFileChange = (e) => {
     const filesArray = Array.from(e.target.files);
     setNovosArquivos({ ...novosArquivos, [e.target.name]: filesArray });
+  };
+  const removerArquivoExistente = (campo, caminhoParaRemover) => {
+    if (
+      !window.confirm(
+        "Deseja remover este arquivo? (Você precisará clicar em Salvar para confirmar)"
+      )
+    )
+      return;
+
+    setFormData((prev) => ({
+      ...prev,
+      [campo]: prev[campo].filter((caminho) => caminho !== caminhoParaRemover),
+    }));
   };
 
   const limparNomeArquivo = (nome) => {
@@ -495,36 +509,50 @@ export default function AdminEditar() {
 
           <section className="bg-sage/10 p-6 rounded-xl space-y-6 border border-sage/30">
             <h3 className="text-xl font-bold text-primary mb-2 flex items-center gap-2">
-              <UploadCloud size={20} /> Adicionar Documentos
+              <UploadCloud size={20} /> Gerenciar Documentos
             </h3>
             <p className="text-sm text-darkText/60 mb-4">
-              Selecione novos arquivos para <strong>adicionar</strong>. Os
-              arquivos antigos serão mantidos.
+              Você pode excluir documentos antigos e adicionar novos.
             </p>
 
             <UploadField
-              label="RG, CPF ou CNH (Novos)"
+              label="RG, CPF ou Coren"
               name="doc_identidade"
+              formField="doc_identidade_url"
               onChange={handleFileChange}
-              files={novosArquivos.doc_identidade}
+              newFiles={novosArquivos.doc_identidade}
+              existingFiles={formData.doc_identidade_url}
+              onRemoveExisting={removerArquivoExistente}
             />
+
             <UploadField
-              label="Cartão CNPJ (Novo)"
+              label="Cartão CNPJ"
               name="doc_cartao_cnpj"
+              formField="doc_cartao_cnpj_url"
               onChange={handleFileChange}
-              files={novosArquivos.doc_cartao_cnpj}
+              newFiles={novosArquivos.doc_cartao_cnpj}
+              existingFiles={formData.doc_cartao_cnpj_url}
+              onRemoveExisting={removerArquivoExistente}
             />
+
             <UploadField
-              label="Comprovante de Endereço (Novo)"
+              label="Comprovante de Endereço"
               name="doc_comprovante_endereco"
+              formField="doc_comprovante_endereco_url"
               onChange={handleFileChange}
-              files={novosArquivos.doc_comprovante_endereco}
+              newFiles={novosArquivos.doc_comprovante_endereco}
+              existingFiles={formData.doc_comprovante_endereco_url}
+              onRemoveExisting={removerArquivoExistente}
             />
+
             <UploadField
-              label="Carteira do Coren (Novo)"
+              label="Carteira do Coren"
               name="doc_coren"
+              formField="doc_coren_url"
               onChange={handleFileChange}
-              files={novosArquivos.doc_coren}
+              newFiles={novosArquivos.doc_coren}
+              existingFiles={formData.doc_coren_url}
+              onRemoveExisting={removerArquivoExistente}
             />
           </section>
 
@@ -548,13 +576,74 @@ export default function AdminEditar() {
     </div>
   );
 }
+function UploadField({
+  label,
+  name,
+  formField,
+  onChange,
+  newFiles,
+  existingFiles,
+  onRemoveExisting,
+}) {
+  const getPublicUrl = (path) => {
+    if (path.startsWith("http")) return path;
 
-function UploadField({ label, name, onChange, files }) {
+    const { data } = supabase.storage
+      .from("documentos-prestadores")
+      .getPublicUrl(path);
+    return data.publicUrl;
+  };
+
   return (
-    <div className="upload-field mb-4">
-      <label className="block font-bold text-sm mb-1 text-darkText">
+    <div className="upload-field mb-6 border-b border-gray-100 pb-4 last:border-0">
+      <label className="block font-bold text-sm mb-2 text-darkText flex justify-between items-center">
         {label}
+        <span className="text-[10px] font-normal text-sage bg-sage/10 px-2 py-1 rounded-full">
+          {existingFiles?.length || 0} arquivos salvos
+        </span>
       </label>
+      {existingFiles && existingFiles.length > 0 && (
+        <div className="mb-3 space-y-2 bg-white p-3 rounded-lg border border-gray-200">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+            Salvos no sistema:
+          </p>
+          {existingFiles.map((path, index) => (
+            <div
+              key={index}
+              className="flex items-center justify-between text-sm bg-gray-50 p-2 rounded border border-gray-100"
+            >
+              <div className="flex items-center gap-2 overflow-hidden">
+                <FileText size={14} className="text-blue-500 shrink-0" />
+                <span
+                  className="truncate text-gray-600 w-48 block"
+                  title={path}
+                >
+                  {path.split("/").pop()}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={getPublicUrl(path)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-1.5 hover:bg-blue-100 text-blue-600 rounded transition-colors"
+                  title="Visualizar"
+                >
+                  <Eye size={14} />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => onRemoveExisting(formField, path)}
+                  className="p-1.5 hover:bg-red-100 text-red-500 rounded transition-colors"
+                  title="Remover da lista (Salvar para confirmar)"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       <input
         type="file"
         name={name}
@@ -562,14 +651,17 @@ function UploadField({ label, name, onChange, files }) {
         multiple
         accept="image/*,.pdf"
       />
-      {files.length > 0 && (
-        <div className="mt-2 space-y-1">
-          {files.map((file, index) => (
+      {newFiles && newFiles.length > 0 && (
+        <div className="mt-2 space-y-1 pl-2 border-l-2 border-green-500">
+          <p className="text-[10px] font-bold text-green-600 uppercase">
+            Novos para enviar:
+          </p>
+          {newFiles.map((file, index) => (
             <div
               key={index}
-              className="text-xs flex items-center gap-1 text-primary"
+              className="text-xs flex items-center gap-1 text-green-700"
             >
-              <FileText size={12} /> {file.name}
+              <UploadCloud size={12} /> {file.name}
             </div>
           ))}
         </div>
