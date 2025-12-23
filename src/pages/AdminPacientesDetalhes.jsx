@@ -666,6 +666,7 @@ export default function AdminPacientesDetalhes() {
                       ))}
                     </select>
                   </div>
+
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="label-mini">Data</label>
@@ -685,6 +686,7 @@ export default function AdminPacientesDetalhes() {
                       </select>
                     </div>
                   </div>
+
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="label-mini">Início</label>
@@ -738,6 +740,7 @@ export default function AdminPacientesDetalhes() {
                   Nenhum plantão agendado para este paciente.
                 </div>
               )}
+
               {plantoes.map((plantao) => {
                 const [pAno, pMes, pDia] = plantao.data_plantao.split("-");
                 const dataPlantaoObj = new Date(pAno, pMes - 1, pDia, 12, 0, 0);
@@ -754,6 +757,7 @@ export default function AdminPacientesDetalhes() {
                             .replace(".", "")}
                         </span>
                         <span className="block text-xl font-bold">
+                          {dataPlantaoObj.getDate()}
                         </span>
                       </div>
                       <div>
