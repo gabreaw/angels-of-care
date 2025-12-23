@@ -338,7 +338,7 @@ export default function AdminEscalas() {
 
     const daysToShow = [];
     const start = new Date(currentDate);
-    start.setHours(12, 0, 0, 0); // Meio-dia
+    start.setHours(12, 0, 0, 0); 
 
     if (viewMode === "week") {
       start.setDate(start.getDate() - start.getDay());

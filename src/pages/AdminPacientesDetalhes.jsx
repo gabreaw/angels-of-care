@@ -17,7 +17,7 @@ import {
   Clock,
   Paperclip,
   Upload,
-  Edit, // <--- Importado ícone de edição
+  Edit,
   X,
 } from "lucide-react";
 
@@ -28,7 +28,6 @@ export default function AdminPacientesDetalhes() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("geral");
 
-  // Estado para o Modal de Edição de Paciente
   const [editModalOpen, setEditModalOpen] = useState(false);
 
   const [historico, setHistorico] = useState([]);
@@ -104,7 +103,6 @@ export default function AdminPacientesDetalhes() {
     setLoading(false);
   }
 
-  // --- FUNÇÃO PARA ATUALIZAR DADOS DO PACIENTE ---
   const atualizarPaciente = async (e) => {
     e.preventDefault();
     const form = e.target;
@@ -130,7 +128,7 @@ export default function AdminPacientesDetalhes() {
       alert("Erro ao atualizar: " + error.message);
     } else {
       setPaciente({ ...paciente, ...updates });
-      setEditModalOpen(false); // Fecha o modal
+      setEditModalOpen(false);
     }
   };
 
@@ -319,7 +317,6 @@ export default function AdminPacientesDetalhes() {
             <h1 className="text-2xl font-serif text-primary font-bold hidden md:block">
               {paciente.nome_paciente}
             </h1>
-            {/* BOTÃO DE EDITAR */}
             <button
               onClick={() => setEditModalOpen(true)}
               className="bg-white hover:bg-gray-100 text-primary p-2 rounded-full shadow border border-beige transition-all"
@@ -362,6 +359,7 @@ export default function AdminPacientesDetalhes() {
             label="Medicamentos"
           />
         </div>
+
         {activeTab === "geral" && (
           <div className="bg-white rounded-3xl shadow-lg border border-beige overflow-hidden p-8 grid md:grid-cols-2 gap-10">
             <div className="space-y-6">
@@ -543,6 +541,7 @@ export default function AdminPacientesDetalhes() {
                 </form>
               </div>
             </div>
+
             <div className="xl:col-span-1 space-y-6">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-lg font-bold text-darkText">
@@ -667,7 +666,6 @@ export default function AdminPacientesDetalhes() {
                       ))}
                     </select>
                   </div>
-
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="label-mini">Data</label>
@@ -687,7 +685,6 @@ export default function AdminPacientesDetalhes() {
                       </select>
                     </div>
                   </div>
-
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="label-mini">Início</label>
@@ -741,79 +738,79 @@ export default function AdminPacientesDetalhes() {
                   Nenhum plantão agendado para este paciente.
                 </div>
               )}
-
-              {plantoes.map((plantao) => (
-                <div
-                  key={plantao.id}
-                  className="bg-white p-4 rounded-xl shadow-sm border border-beige flex justify-between items-center group"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="bg-sage/10 text-primary p-3 rounded-lg text-center min-w-[60px]">
-                      <span className="block text-xs font-bold uppercase">
-                        {new Date(plantao.data_plantao)
-                          .toLocaleDateString("pt-BR", { weekday: "short" })
-                          .replace(".", "")}
-                      </span>
-                      <span className="block text-xl font-bold">
-                        {new Date(plantao.data_plantao).getDate()}
-                      </span>
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-darkText">
-                        {plantao.funcionarios?.nome_completo ||
-                          "Sem funcionário"}
-                      </h4>
-                      <div className="flex items-center gap-3 text-xs text-darkText/60 mt-1">
-                        <span
-                          className={`px-2 py-0.5 rounded-full font-bold uppercase ${
-                            plantao.tipo_turno === "Noturno"
-                              ? "bg-indigo-100 text-indigo-700"
-                              : "bg-orange-100 text-orange-700"
-                          }`}
-                        >
-                          {plantao.tipo_turno}
+              {plantoes.map((plantao) => {
+                const [pAno, pMes, pDia] = plantao.data_plantao.split("-");
+                const dataPlantaoObj = new Date(pAno, pMes - 1, pDia, 12, 0, 0);
+                return (
+                  <div
+                    key={plantao.id}
+                    className="bg-white p-4 rounded-xl shadow-sm border border-beige flex justify-between items-center group"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="bg-sage/10 text-primary p-3 rounded-lg text-center min-w-[60px]">
+                        <span className="block text-xs font-bold uppercase">
+                          {dataPlantaoObj
+                            .toLocaleDateString("pt-BR", { weekday: "short" })
+                            .replace(".", "")}
                         </span>
-                        <span className="flex items-center gap-1">
-                          <Clock size={12} />{" "}
-                          {plantao.horario_inicio.slice(0, 5)} -{" "}
-                          {plantao.horario_fim.slice(0, 5)}
+                        <span className="block text-xl font-bold">
                         </span>
                       </div>
+                      <div>
+                        <h4 className="font-bold text-darkText">
+                          {plantao.funcionarios?.nome_completo ||
+                            "Sem funcionário"}
+                        </h4>
+                        <div className="flex items-center gap-3 text-xs text-darkText/60 mt-1">
+                          <span
+                            className={`px-2 py-0.5 rounded-full font-bold uppercase ${
+                              plantao.tipo_turno === "Noturno"
+                                ? "bg-indigo-100 text-indigo-700"
+                                : "bg-orange-100 text-orange-700"
+                            }`}
+                          >
+                            {plantao.tipo_turno}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Clock size={12} />{" "}
+                            {plantao.horario_inicio.slice(0, 5)} -{" "}
+                            {plantao.horario_fim.slice(0, 5)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-[10px] font-bold uppercase px-2 py-1 rounded border ${
+                          plantao.status === "agendado"
+                            ? "border-blue-200 text-blue-600 bg-blue-50"
+                            : plantao.status === "realizado"
+                            ? "border-green-200 text-green-600 bg-green-50"
+                            : "border-gray-200 text-gray-400"
+                        }`}
+                      >
+                        {plantao.status}
+                      </span>
+                      <button
+                        onClick={() =>
+                          deletarItem(
+                            "plantoes",
+                            plantao.id,
+                            setPlantoes,
+                            plantoes
+                          )
+                        }
+                        className="text-gray-300 hover:text-red-500 p-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`text-[10px] font-bold uppercase px-2 py-1 rounded border ${
-                        plantao.status === "agendado"
-                          ? "border-blue-200 text-blue-600 bg-blue-50"
-                          : plantao.status === "realizado"
-                          ? "border-green-200 text-green-600 bg-green-50"
-                          : "border-gray-200 text-gray-400"
-                      }`}
-                    >
-                      {plantao.status}
-                    </span>
-                    <button
-                      onClick={() =>
-                        deletarItem(
-                          "plantoes",
-                          plantao.id,
-                          setPlantoes,
-                          plantoes
-                        )
-                      }
-                      className="text-gray-300 hover:text-red-500 p-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
-
-        {/* --- ABA SINAIS --- */}
         {activeTab === "sinais" && (
           <div className="bg-white rounded-2xl shadow border border-beige p-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
@@ -923,8 +920,6 @@ export default function AdminPacientesDetalhes() {
             </div>
           </div>
         )}
-
-        {/* --- ABA PRONTUÁRIO/MEDICAMENTOS --- */}
         {activeTab === "prontuario" && (
           <div className="grid lg:grid-cols-2 gap-6">
             <div className="bg-white rounded-2xl shadow border border-beige p-6">
@@ -1076,8 +1071,6 @@ export default function AdminPacientesDetalhes() {
           </div>
         )}
       </div>
-
-      {/* --- MODAL DE EDIÇÃO DE PACIENTE --- */}
       {editModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl border border-beige max-h-[90vh] overflow-y-auto">
