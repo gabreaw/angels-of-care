@@ -3,13 +3,11 @@ import { supabase } from "../lib/supabase";
 import { Link } from "react-router-dom";
 import {
   CheckCircle,
-  AlertCircle,
-  FileText,
   MapPin,
   CreditCard,
 } from "lucide-react";
 
-export default function CadastroParceiro() {
+export default function CadastroExtra() {
   const [loading, setLoading] = useState(false);
   const [sucesso, setSucesso] = useState(false);
   const [loadingCep, setLoadingCep] = useState(false);
@@ -38,13 +36,6 @@ export default function CadastroParceiro() {
     coren_numero: "",
     nacionalidade: "Brasileiro(a)",
     orgao_emissor: "",
-  });
-
-  const [arquivos, setArquivos] = useState({
-    doc_identidade: [],
-    doc_cartao_cnpj: [],
-    doc_comprovante_endereco: [],
-    doc_coren: [],
   });
 
   const mascaraCPF = (valor) =>
@@ -113,37 +104,6 @@ export default function CadastroParceiro() {
     }
   };
 
-  const handleFileChange = (e) => {
-    const filesArray = Array.from(e.target.files);
-    setArquivos({ ...arquivos, [e.target.name]: filesArray });
-  };
-
-  const limparNomeArquivo = (nome) => {
-    return nome
-      .normalize("NFD") 
-      .replace(/[\u0300-\u036f]/g, "") 
-      .replace(/\s+/g, "_")
-      .replace(/[^a-zA-Z0-9._-]/g, "");
-  };
-
-  const uploadMultiplos = async (filesArray, pasta) => {
-    if (!filesArray || filesArray.length === 0) return null;
-    const paths = [];
-
-    for (const file of filesArray) {
-      const nomeLimpo = limparNomeArquivo(file.name);
-      const nomeArquivo = `${Date.now()}_${nomeLimpo}`;
-
-      const { data, error } = await supabase.storage
-        .from("documentos-prestadores")
-        .upload(`${pasta}/${nomeArquivo}`, file);
-
-      if (error) throw error;
-      paths.push(data.path);
-    }
-    return paths;
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -157,27 +117,18 @@ export default function CadastroParceiro() {
         telefone: `+55${formData.telefone.replace(/\D/g, "")}`,
       };
 
-      const linksIdentidade = await uploadMultiplos(
-        arquivos.doc_identidade,
-        "identidade"
-      );
-      const linksCnpj = await uploadMultiplos(arquivos.doc_cartao_cnpj, "cnpj");
-      const linksEndereco = await uploadMultiplos(
-        arquivos.doc_comprovante_endereco,
-        "endereco"
-      );
-      const linksCoren = await uploadMultiplos(arquivos.doc_coren, "coren");
-
       const enderecoFormatado = `${formData.logradouro}, ${formData.numero} - ${formData.bairro}, ${formData.cidade}/${formData.estado} (CEP: ${formData.cep})`;
 
+      // Inserção simplificada sem URLs de documentos
       const { error } = await supabase.from("funcionarios").insert([
         {
           ...dadosLimpos,
           endereco_completo: enderecoFormatado,
-          doc_identidade_url: linksIdentidade,
-          doc_cartao_cnpj_url: linksCnpj,
-          doc_comprovante_endereco_url: linksEndereco,
-          doc_coren_url: linksCoren,
+          // Removemos as colunas de documentos, ou enviamos null/array vazio se o banco exigir
+          doc_identidade_url: [],
+          doc_cartao_cnpj_url: [],
+          doc_comprovante_endereco_url: [],
+          doc_coren_url: [],
           status: "pendente",
         },
       ]);
@@ -200,7 +151,7 @@ export default function CadastroParceiro() {
             Cadastro Enviado!
           </h1>
           <p className="text-darkText/70 mb-6">
-            Recebemos seus documentos. Nossa equipe fará a análise em breve.
+            Recebemos seus dados. Nossa equipe entrará em contato em breve.
           </p>
           <Link
             to="/"
@@ -221,7 +172,7 @@ export default function CadastroParceiro() {
             Seja um Parceiro Angels
           </h1>
           <p className="text-white/80 mt-2">
-            Preencha seus dados. (Campos formatam automaticamente)
+            Preencha seus dados para cadastro rápido.
           </p>
         </div>
 
@@ -259,7 +210,7 @@ export default function CadastroParceiro() {
                   />
                   <input
                     name="orgao_emissor"
-                    placeholder="Org. Emissor (Ex: SSP/SC)"
+                    placeholder="Org. Emissor"
                     onChange={handleChange}
                     required
                     className="input-padrao"
@@ -490,41 +441,6 @@ export default function CadastroParceiro() {
             </div>
           </section>
 
-          <section>
-            <h3 className="text-xl font-bold text-primary mb-4">
-              4. Documentação
-            </h3>
-            <div className="bg-sage/10 p-6 rounded-xl space-y-6 border border-sage/30">
-              <UploadField
-                label="RG, CPF ou CNH (Frente e Verso)"
-                name="doc_identidade"
-                onChange={handleFileChange}
-                files={arquivos.doc_identidade}
-                required
-              />
-              <UploadField
-                label="Cartão CNPJ"
-                name="doc_cartao_cnpj"
-                onChange={handleFileChange}
-                files={arquivos.doc_cartao_cnpj}
-                required
-              />
-              <UploadField
-                label="Comprovante de Endereço"
-                name="doc_comprovante_endereco"
-                onChange={handleFileChange}
-                files={arquivos.doc_comprovante_endereco}
-                required
-              />
-              <UploadField
-                label="Carteira do Coren (Se houver)"
-                name="doc_coren"
-                onChange={handleFileChange}
-                files={arquivos.doc_coren}
-              />
-            </div>
-          </section>
-
           <button
             type="submit"
             disabled={loading}
@@ -538,36 +454,6 @@ export default function CadastroParceiro() {
         .input-padrao { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ddd; outline: none; }
         .input-padrao:focus { border-color: #4B5E4F; box-shadow: 0 0 0 2px rgba(75, 94, 79, 0.2); }
       `}</style>
-    </div>
-  );
-}
-
-function UploadField({ label, name, onChange, files, required }) {
-  return (
-    <div className="upload-field">
-      <label className="block font-bold text-sm mb-1 text-darkText">
-        {label} {required && <span className="text-red-500">*</span>}
-      </label>
-      <input
-        type="file"
-        name={name}
-        onChange={onChange}
-        multiple
-        accept="image/*,.pdf"
-        className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-[#3A4A3E]"
-      />
-      {files.length > 0 && (
-        <div className="mt-2 space-y-1">
-          {files.map((file, index) => (
-            <div
-              key={index}
-              className="text-xs flex items-center gap-1 text-primary"
-            >
-              <FileText size={12} /> {file.name}
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

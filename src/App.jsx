@@ -22,6 +22,7 @@ import AdminEscalas from "./pages/AdminEscalas";
 import AdminConfirmacaoEscala from "./pages/AdminConfirmacaoEscala";
 
 import ProtectedRoute from "./components/auth/ProtectedRoute";
+import CadastroExtra from "./pages/CadastroExtra";
 
 export default function App() {
   return (
@@ -54,6 +55,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/seja-parceiro" element={<CadastroParceiro />} />
+          <Route path="/seja-parceiro-extra" element={<CadastroExtra />} />
           <Route path="/login" element={<LoginPage />} />
 
           <Route element={<ProtectedRoute />}>
