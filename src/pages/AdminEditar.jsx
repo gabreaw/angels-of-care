@@ -1,24 +1,35 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import { createClient } from "@supabase/supabase-js";
 import {
   ArrowLeft,
   Save,
   MapPin,
   User,
   CreditCard,
-  Briefcase,
   FileText,
   UploadCloud,
-  Trash2, 
-  Eye, 
+  Trash2,
+  Eye,
+  Lock, 
+  CheckCircle,
+  AlertTriangle,
+  X,
 } from "lucide-react";
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export default function AdminEditar() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  const [modalAcessoOpen, setModalAcessoOpen] = useState(false);
+  const [novaSenha, setNovaSenha] = useState("");
+  const [criandoAcesso, setCriandoAcesso] = useState(false);
 
   const [formData, setFormData] = useState({
     nome_completo: "",
@@ -44,6 +55,8 @@ export default function AdminEditar() {
     agencia: "",
     conta: "",
     tipo_conta: "",
+    auth_id: null,
+    role: "prestador",
     doc_identidade_url: [],
     doc_cartao_cnpj_url: [],
     doc_comprovante_endereco_url: [],
@@ -82,6 +95,7 @@ export default function AdminEditar() {
           banco: data.banco || "",
           agencia: data.agencia || "",
           conta: data.conta || "",
+          auth_id: data.auth_id || null, // Garante null se vazio
           doc_identidade_url: data.doc_identidade_url || [],
           doc_cartao_cnpj_url: data.doc_cartao_cnpj_url || [],
           doc_comprovante_endereco_url: data.doc_comprovante_endereco_url || [],
@@ -135,6 +149,7 @@ export default function AdminEditar() {
     const filesArray = Array.from(e.target.files);
     setNovosArquivos({ ...novosArquivos, [e.target.name]: filesArray });
   };
+
   const removerArquivoExistente = (campo, caminhoParaRemover) => {
     if (
       !window.confirm(
@@ -142,7 +157,6 @@ export default function AdminEditar() {
       )
     )
       return;
-
     setFormData((prev) => ({
       ...prev,
       [campo]: prev[campo].filter((caminho) => caminho !== caminhoParaRemover),
@@ -190,6 +204,57 @@ export default function AdminEditar() {
       }
     } catch (error) {
       console.error(error);
+    }
+  };
+
+  const handleCriarAcesso = async (e) => {
+    e.preventDefault();
+    if (novaSenha.length < 6) {
+      alert("A senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+    setCriandoAcesso(true);
+
+    try {
+      const tempSupabase = createClient(supabaseUrl, supabaseKey);
+
+      const { data: authData, error: authError } =
+        await tempSupabase.auth.signUp({
+          email: formData.email,
+          password: novaSenha,
+        });
+
+      if (authError) {
+        if (authError.message.includes("already registered")) {
+          throw new Error(
+            "Este email já possui cadastro. Use a recuperação de senha ou outro email."
+          );
+        }
+        throw authError;
+      }
+
+      if (authData.user) {
+        const { error: updateError } = await supabase
+          .from("funcionarios")
+          .update({
+            auth_id: authData.user.id,
+            role: "prestador", 
+            status: "ativo",
+          })
+          .eq("id", id);
+
+        if (updateError) throw updateError;
+
+        setFormData((prev) => ({ ...prev, auth_id: authData.user.id }));
+        alert(
+          `Acesso criado com sucesso!\nLogin: ${formData.email}\nSenha: ${novaSenha}`
+        );
+        setModalAcessoOpen(false);
+      }
+    } catch (error) {
+      alert("Erro ao criar acesso: " + error.message);
+    } finally {
+      setCriandoAcesso(false);
     }
   };
 
@@ -268,303 +333,392 @@ export default function AdminEditar() {
           </Link>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-8">
-          <section>
-            <h3 className="text-lg font-bold text-primary mb-4 border-b pb-2 flex gap-2 items-center">
-              <User size={18} /> Dados Pessoais
+        <div className="p-8 space-y-8">
+          <section className="bg-indigo-50 p-6 rounded-xl border border-indigo-100">
+            <h3 className="text-lg font-bold text-indigo-900 mb-4 flex gap-2 items-center border-b border-indigo-200 pb-2">
+              <Lock size={18} /> Acesso ao Aplicativo
             </h3>
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="col-span-2">
-                <label className="label-campo">Nome Completo</label>
-                <input
-                  name="nome_completo"
-                  value={formData.nome_completo}
-                  onChange={handleChange}
-                  className="input-padrao"
-                />
-              </div>
+
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
-                <label className="label-campo">CPF</label>
-                <input
-                  name="cpf"
-                  value={formData.cpf}
-                  onChange={handleChange}
-                  className="input-padrao"
-                />
+                {formData.auth_id ? (
+                  <div className="flex items-center gap-2 text-green-700 font-bold bg-green-100 px-3 py-2 rounded-lg w-fit">
+                    <CheckCircle size={20} />
+                    <span>Usuário com Acesso Ativo</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-amber-700 font-bold bg-amber-100 px-3 py-2 rounded-lg w-fit">
+                    <AlertTriangle size={20} />
+                    <span>Sem acesso ao sistema</span>
+                  </div>
+                )}
+                <p className="text-sm text-gray-500 mt-2">
+                  Login vinculado ao email: <strong>{formData.email}</strong>
+                </p>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="label-campo">RG</label>
+
+              {!formData.auth_id && (
+                <button
+                  type="button"
+                  onClick={() => setModalAcessoOpen(true)}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg shadow transition-all whitespace-nowrap"
+                >
+                  Gerar Senha de Acesso
+                </button>
+              )}
+            </div>
+          </section>
+
+          <form onSubmit={handleSubmit} className="space-y-8">
+            <section>
+              <h3 className="text-lg font-bold text-primary mb-4 border-b pb-2 flex gap-2 items-center">
+                <User size={18} /> Dados Pessoais
+              </h3>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className="label-campo">Nome Completo</label>
                   <input
-                    name="rg"
-                    value={formData.rg}
+                    name="nome_completo"
+                    value={formData.nome_completo}
                     onChange={handleChange}
                     className="input-padrao"
                   />
                 </div>
                 <div>
-                  <label className="label-campo">Org. Emissor</label>
+                  <label className="label-campo">CPF</label>
                   <input
-                    name="orgao_emissor"
-                    value={formData.orgao_emissor}
+                    name="cpf"
+                    value={formData.cpf}
+                    onChange={handleChange}
+                    className="input-padrao"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="label-campo">RG</label>
+                    <input
+                      name="rg"
+                      value={formData.rg}
+                      onChange={handleChange}
+                      className="input-padrao"
+                    />
+                  </div>
+                  <div>
+                    <label className="label-campo">Org. Emissor</label>
+                    <input
+                      name="orgao_emissor"
+                      value={formData.orgao_emissor}
+                      onChange={handleChange}
+                      className="input-padrao"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="label-campo">Nacionalidade</label>
+                  <input
+                    name="nacionalidade"
+                    value={formData.nacionalidade}
+                    onChange={handleChange}
+                    className="input-padrao"
+                  />
+                </div>
+                <div>
+                  <label className="label-campo">Estado Civil</label>
+                  <select
+                    name="estado_civil"
+                    value={formData.estado_civil}
+                    onChange={handleChange}
+                    className="input-padrao bg-white"
+                  >
+                    <option value="">Selecione</option>
+                    <option>Solteiro(a)</option>
+                    <option>Casado(a)</option>
+                    <option>Divorciado(a)</option>
+                    <option>Viúvo(a)</option>
+                    <option>União Estável</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label-campo">Email</label>
+                  <input
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    className="input-padrao"
+                  />
+                </div>
+                <div>
+                  <label className="label-campo">WhatsApp</label>
+                  <input
+                    name="telefone"
+                    value={formData.telefone}
                     onChange={handleChange}
                     className="input-padrao"
                   />
                 </div>
               </div>
-              <div>
-                <label className="label-campo">Nacionalidade</label>
-                <input
-                  name="nacionalidade"
-                  value={formData.nacionalidade}
-                  onChange={handleChange}
-                  className="input-padrao"
-                />
-              </div>
-              <div>
-                <label className="label-campo">Estado Civil</label>
-                <select
-                  name="estado_civil"
-                  value={formData.estado_civil}
-                  onChange={handleChange}
-                  className="input-padrao bg-white"
-                >
-                  <option value="">Selecione</option>
-                  <option>Solteiro(a)</option>
-                  <option>Casado(a)</option>
-                  <option>Divorciado(a)</option>
-                  <option>Viúvo(a)</option>
-                  <option>União Estável</option>
-                </select>
-              </div>
-              <div>
-                <label className="label-campo">Email</label>
-                <input
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  className="input-padrao"
-                />
-              </div>
-              <div>
-                <label className="label-campo">WhatsApp</label>
-                <input
-                  name="telefone"
-                  value={formData.telefone}
-                  onChange={handleChange}
-                  className="input-padrao"
-                />
-              </div>
-            </div>
-          </section>
+            </section>
 
-          <section className="bg-sage/5 p-4 rounded-xl border border-sage/20">
-            <h3 className="text-lg font-bold text-primary mb-4 border-b pb-2 flex gap-2 items-center">
-              <MapPin size={18} /> Endereço
-            </h3>
-            <div className="grid grid-cols-4 gap-4">
-              <div className="col-span-1">
-                <label className="label-campo">CEP</label>
-                <input
-                  name="cep"
-                  value={formData.cep}
-                  onChange={handleChange}
-                  onBlur={buscarCep}
-                  className="input-padrao"
-                />
+            <section className="bg-sage/5 p-4 rounded-xl border border-sage/20">
+              <h3 className="text-lg font-bold text-primary mb-4 border-b pb-2 flex gap-2 items-center">
+                <MapPin size={18} /> Endereço
+              </h3>
+              <div className="grid grid-cols-4 gap-4">
+                <div className="col-span-1">
+                  <label className="label-campo">CEP</label>
+                  <input
+                    name="cep"
+                    value={formData.cep}
+                    onChange={handleChange}
+                    onBlur={buscarCep}
+                    className="input-padrao"
+                  />
+                </div>
+                <div className="col-span-3">
+                  <label className="label-campo">Rua</label>
+                  <input
+                    name="logradouro"
+                    value={formData.logradouro}
+                    onChange={handleChange}
+                    className="input-padrao"
+                  />
+                </div>
+                <div className="col-span-1">
+                  <label className="label-campo">Número</label>
+                  <input
+                    name="numero"
+                    value={formData.numero}
+                    onChange={handleChange}
+                    className="input-padrao"
+                  />
+                </div>
+                <div className="col-span-3">
+                  <label className="label-campo">Bairro</label>
+                  <input
+                    name="bairro"
+                    value={formData.bairro}
+                    onChange={handleChange}
+                    className="input-padrao"
+                  />
+                </div>
+                <div className="col-span-3">
+                  <label className="label-campo">Cidade</label>
+                  <input
+                    name="cidade"
+                    value={formData.cidade}
+                    onChange={handleChange}
+                    className="input-padrao"
+                  />
+                </div>
+                <div className="col-span-1">
+                  <label className="label-campo">UF</label>
+                  <input
+                    name="estado"
+                    value={formData.estado}
+                    onChange={handleChange}
+                    className="input-padrao"
+                  />
+                </div>
+                <div className="col-span-4">
+                  <label className="label-campo">Complemento</label>
+                  <input
+                    name="complemento"
+                    value={formData.complemento}
+                    onChange={handleChange}
+                    className="input-padrao"
+                  />
+                </div>
               </div>
-              <div className="col-span-3">
-                <label className="label-campo">Rua</label>
-                <input
-                  name="logradouro"
-                  value={formData.logradouro}
-                  onChange={handleChange}
-                  className="input-padrao"
-                />
-              </div>
-              <div className="col-span-1">
-                <label className="label-campo">Número</label>
-                <input
-                  name="numero"
-                  value={formData.numero}
-                  onChange={handleChange}
-                  className="input-padrao"
-                />
-              </div>
-              <div className="col-span-3">
-                <label className="label-campo">Bairro</label>
-                <input
-                  name="bairro"
-                  value={formData.bairro}
-                  onChange={handleChange}
-                  className="input-padrao"
-                />
-              </div>
-              <div className="col-span-3">
-                <label className="label-campo">Cidade</label>
-                <input
-                  name="cidade"
-                  value={formData.cidade}
-                  onChange={handleChange}
-                  className="input-padrao"
-                />
-              </div>
-              <div className="col-span-1">
-                <label className="label-campo">UF</label>
-                <input
-                  name="estado"
-                  value={formData.estado}
-                  onChange={handleChange}
-                  className="input-padrao"
-                />
-              </div>
-              <div className="col-span-4">
-                <label className="label-campo">Complemento</label>
-                <input
-                  name="complemento"
-                  value={formData.complemento}
-                  onChange={handleChange}
-                  className="input-padrao"
-                />
-              </div>
-            </div>
-          </section>
+            </section>
 
-          <section className="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
-            <h3 className="text-lg font-bold text-primary mb-4 border-b pb-2 flex gap-2 items-center">
-              <CreditCard size={18} /> Dados MEI & Bancários
-            </h3>
-            <div className="grid md:grid-cols-3 gap-4 mb-4">
-              <div>
-                <label className="label-campo">Função</label>
-                <select
-                  name="funcao"
-                  value={formData.funcao}
-                  onChange={handleChange}
-                  className="input-padrao bg-white"
-                >
-                  <option>Téc. Enfermagem</option>
-                  <option>Cuidador</option>
-                  <option>Enfermeiro</option>
-                </select>
+            <section className="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+              <h3 className="text-lg font-bold text-primary mb-4 border-b pb-2 flex gap-2 items-center">
+                <CreditCard size={18} /> Dados MEI & Bancários
+              </h3>
+              <div className="grid md:grid-cols-3 gap-4 mb-4">
+                <div>
+                  <label className="label-campo">Função</label>
+                  <select
+                    name="funcao"
+                    value={formData.funcao}
+                    onChange={handleChange}
+                    className="input-padrao bg-white"
+                  >
+                    <option>Téc. Enfermagem</option>
+                    <option>Cuidador</option>
+                    <option>Enfermeiro</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label-campo">CNPJ</label>
+                  <input
+                    name="cnpj"
+                    value={formData.cnpj}
+                    onChange={handleChange}
+                    className="input-padrao"
+                  />
+                </div>
+                <div>
+                  <label className="label-campo">Nº Coren</label>
+                  <input
+                    name="coren_numero"
+                    value={formData.coren_numero}
+                    onChange={handleChange}
+                    className="input-padrao"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="label-campo">CNPJ</label>
-                <input
-                  name="cnpj"
-                  value={formData.cnpj}
-                  onChange={handleChange}
-                  className="input-padrao"
-                />
+              <div className="grid grid-cols-3 gap-4 border-t border-blue-200 pt-4">
+                <div className="col-span-3 md:col-span-1">
+                  <label className="label-campo text-blue-800">Banco</label>
+                  <input
+                    name="banco"
+                    value={formData.banco}
+                    onChange={handleChange}
+                    className="input-padrao"
+                  />
+                </div>
+                <div className="col-span-1">
+                  <label className="label-campo text-blue-800">Agência</label>
+                  <input
+                    name="agencia"
+                    value={formData.agencia}
+                    onChange={handleChange}
+                    className="input-padrao"
+                  />
+                </div>
+                <div className="col-span-2 md:col-span-1">
+                  <label className="label-campo text-blue-800">Conta</label>
+                  <input
+                    name="conta"
+                    value={formData.conta}
+                    onChange={handleChange}
+                    className="input-padrao"
+                  />
+                </div>
+                <div className="col-span-3 md:col-span-1">
+                  <label className="label-campo text-blue-800">Chave PIX</label>
+                  <input
+                    name="chave_pix"
+                    value={formData.chave_pix}
+                    onChange={handleChange}
+                    className="input-padrao"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="label-campo">Nº Coren</label>
-                <input
-                  name="coren_numero"
-                  value={formData.coren_numero}
-                  onChange={handleChange}
-                  className="input-padrao"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-4 border-t border-blue-200 pt-4">
-              <div className="col-span-3 md:col-span-1">
-                <label className="label-campo text-blue-800">Banco</label>
-                <input
-                  name="banco"
-                  value={formData.banco}
-                  onChange={handleChange}
-                  className="input-padrao"
-                />
-              </div>
-              <div className="col-span-1">
-                <label className="label-campo text-blue-800">Agência</label>
-                <input
-                  name="agencia"
-                  value={formData.agencia}
-                  onChange={handleChange}
-                  className="input-padrao"
-                />
-              </div>
-              <div className="col-span-2 md:col-span-1">
-                <label className="label-campo text-blue-800">Conta</label>
-                <input
-                  name="conta"
-                  value={formData.conta}
-                  onChange={handleChange}
-                  className="input-padrao"
-                />
-              </div>
-              <div className="col-span-3 md:col-span-1">
-                <label className="label-campo text-blue-800">Chave PIX</label>
-                <input
-                  name="chave_pix"
-                  value={formData.chave_pix}
-                  onChange={handleChange}
-                  className="input-padrao"
-                />
-              </div>
-            </div>
-          </section>
+            </section>
 
-          <section className="bg-sage/10 p-6 rounded-xl space-y-6 border border-sage/30">
-            <h3 className="text-xl font-bold text-primary mb-2 flex items-center gap-2">
-              <UploadCloud size={20} /> Gerenciar Documentos
-            </h3>
-            <p className="text-sm text-darkText/60 mb-4">
-              Você pode excluir documentos antigos e adicionar novos.
+            <section className="bg-sage/10 p-6 rounded-xl space-y-6 border border-sage/30">
+              <h3 className="text-xl font-bold text-primary mb-2 flex items-center gap-2">
+                <UploadCloud size={20} /> Gerenciar Documentos
+              </h3>
+              <p className="text-sm text-darkText/60 mb-4">
+                Você pode excluir documentos antigos e adicionar novos.
+              </p>
+
+              <UploadField
+                label="RG, CPF ou Coren"
+                name="doc_identidade"
+                formField="doc_identidade_url"
+                onChange={handleFileChange}
+                newFiles={novosArquivos.doc_identidade}
+                existingFiles={formData.doc_identidade_url}
+                onRemoveExisting={removerArquivoExistente}
+              />
+              <UploadField
+                label="Cartão CNPJ"
+                name="doc_cartao_cnpj"
+                formField="doc_cartao_cnpj_url"
+                onChange={handleFileChange}
+                newFiles={novosArquivos.doc_cartao_cnpj}
+                existingFiles={formData.doc_cartao_cnpj_url}
+                onRemoveExisting={removerArquivoExistente}
+              />
+              <UploadField
+                label="Comprovante de Endereço"
+                name="doc_comprovante_endereco"
+                formField="doc_comprovante_endereco_url"
+                onChange={handleFileChange}
+                newFiles={novosArquivos.doc_comprovante_endereco}
+                existingFiles={formData.doc_comprovante_endereco_url}
+                onRemoveExisting={removerArquivoExistente}
+              />
+              <UploadField
+                label="Carteira do Coren"
+                name="doc_coren"
+                formField="doc_coren_url"
+                onChange={handleFileChange}
+                newFiles={novosArquivos.doc_coren}
+                existingFiles={formData.doc_coren_url}
+                onRemoveExisting={removerArquivoExistente}
+              />
+            </section>
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg text-lg"
+            >
+              <Save size={20} /> {saving ? "Salvando..." : "Salvar Alterações"}
+            </button>
+          </form>
+        </div>
+      </div>
+
+      {modalAcessoOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 border border-indigo-100">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-indigo-900">
+                Criar Acesso
+              </h3>
+              <button
+                onClick={() => setModalAcessoOpen(false)}
+                className="text-gray-400 hover:text-red-500"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-4">
+              Isso criará um login para <strong>{formData.email}</strong>.
+              Defina uma senha inicial para o prestador.
             </p>
 
-            <UploadField
-              label="RG, CPF ou Coren"
-              name="doc_identidade"
-              formField="doc_identidade_url"
-              onChange={handleFileChange}
-              newFiles={novosArquivos.doc_identidade}
-              existingFiles={formData.doc_identidade_url}
-              onRemoveExisting={removerArquivoExistente}
-            />
+            <form onSubmit={handleCriarAcesso}>
+              <div className="mb-4">
+                <label className="block text-sm font-bold text-gray-700 mb-1">
+                  Senha Provisória
+                </label>
+                <input
+                  type="text"
+                  value={novaSenha}
+                  onChange={(e) => setNovaSenha(e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:border-indigo-500 outline-none font-mono text-center text-lg tracking-widest"
+                  placeholder="Ex: mudar123"
+                  required
+                />
+              </div>
 
-            <UploadField
-              label="Cartão CNPJ"
-              name="doc_cartao_cnpj"
-              formField="doc_cartao_cnpj_url"
-              onChange={handleFileChange}
-              newFiles={novosArquivos.doc_cartao_cnpj}
-              existingFiles={formData.doc_cartao_cnpj_url}
-              onRemoveExisting={removerArquivoExistente}
-            />
+              <div className="bg-yellow-50 p-3 rounded-lg text-xs text-yellow-800 mb-6 border border-yellow-200">
+                ⚠️ Certifique-se que o email acima está correto. O sistema
+                vinculará o login a este funcionário automaticamente.
+              </div>
 
-            <UploadField
-              label="Comprovante de Endereço"
-              name="doc_comprovante_endereco"
-              formField="doc_comprovante_endereco_url"
-              onChange={handleFileChange}
-              newFiles={novosArquivos.doc_comprovante_endereco}
-              existingFiles={formData.doc_comprovante_endereco_url}
-              onRemoveExisting={removerArquivoExistente}
-            />
+              <button
+                type="submit"
+                disabled={criandoAcesso}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-all shadow-md"
+              >
+                {criandoAcesso
+                  ? "Criando e Vinculando..."
+                  : "Confirmar e Criar"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
-            <UploadField
-              label="Carteira do Coren"
-              name="doc_coren"
-              formField="doc_coren_url"
-              onChange={handleFileChange}
-              newFiles={novosArquivos.doc_coren}
-              existingFiles={formData.doc_coren_url}
-              onRemoveExisting={removerArquivoExistente}
-            />
-          </section>
-
-          <button
-            type="submit"
-            disabled={saving}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg text-lg"
-          >
-            <Save size={20} /> {saving ? "Salvando..." : "Salvar Alterações"}
-          </button>
-        </form>
-      </div>
       <style>{`
         .input-padrao { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd; outline: none; transition: all 0.2s; }
         .input-padrao:focus { border-color: #4B5E4F; box-shadow: 0 0 0 3px rgba(75, 94, 79, 0.1); }
@@ -576,6 +730,7 @@ export default function AdminEditar() {
     </div>
   );
 }
+
 function UploadField({
   label,
   name,

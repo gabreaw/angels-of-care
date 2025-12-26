@@ -13,6 +13,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      // 1. Tenta fazer login no sistema de Autenticação
       const {
         data: { user },
         error,
@@ -23,23 +24,29 @@ export default function LoginPage() {
 
       if (error) throw error;
 
+      // 2. Se logou, vai na tabela de funcionários ver quem é essa pessoa
       const { data: funcionario, error: funcError } = await supabase
         .from("funcionarios")
         .select("role")
         .eq("auth_id", user.id)
         .single();
 
+      // Se não achou o funcionário vinculado ao login
       if (funcError || !funcionario) {
-        throw new Error("Perfil de funcionário não encontrado.");
+        throw new Error(
+          "Usuário não vinculado a nenhum perfil de funcionário."
+        );
       }
 
+      // 3. Redirecionamento Baseado no Cargo (Role)
       if (funcionario.role === "admin") {
         navigate("/admin");
       } else {
-        navigate("/app/home");
+        navigate("/app/home"); // Área do Prestador
       }
     } catch (error) {
       alert("Erro ao entrar: " + error.message);
+      // Se deu erro na verificação do cargo, desloga para não ficar preso
       await supabase.auth.signOut();
     } finally {
       setLoading(false);
@@ -53,7 +60,9 @@ export default function LoginPage() {
           <h2 className="text-3xl font-serif text-primary font-bold">
             Acesso Restrito
           </h2>
-          <p className="text-darkText/60 mt-2">Bem-vindo ao Angels of Care.</p>
+          <p className="text-darkText/60 mt-2">
+            Insira suas credenciais para continuar.
+          </p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-6">
@@ -86,9 +95,9 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-primary hover:bg-[#3A4A3E] text-white font-bold py-3 rounded-lg transition-all shadow-lg"
+            className="w-full bg-primary hover:bg-[#3A4A3E] text-white font-bold py-3 rounded-lg transition-all shadow-lg flex justify-center"
           >
-            {loading ? "Entrando..." : "Acessar"}
+            {loading ? "Verificando..." : "Acessar Painel"}
           </button>
         </form>
       </div>

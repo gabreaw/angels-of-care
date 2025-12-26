@@ -2,55 +2,31 @@ import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Helmet, HelmetProvider } from "react-helmet-async";
 
-// Páginas Públicas
 import Home from "./pages/Home";
 import CadastroParceiro from "./pages/CadastroParceiro";
+import CadastroExtra from "./pages/CadastroExtra";
 import LoginPage from "./pages/LoginPage";
 
-// Páginas Privadas (Admin)
 import Dashboard from "./pages/Dashboard";
 import AdminListaFuncionarios from "./pages/AdminListaFuncionarios";
 import AdminFuncionarios from "./pages/AdminFuncionarios";
 import AdminDetalhes from "./pages/AdminDetalhes";
 import AdminEditar from "./pages/AdminEditar";
 
-// Importações de Pacientes
 import AdminPacientes from "./pages/AdminPacientes";
 import AdminPacientesNovo from "./pages/AdminPacientesNovo";
 import AdminPacientesDetalhes from "./pages/AdminPacientesDetalhes";
 import AdminEscalas from "./pages/AdminEscalas";
 import AdminConfirmacaoEscala from "./pages/AdminConfirmacaoEscala";
 
+import ProviderHome from "./pages/ProviderHome";
+
 import ProtectedRoute from "./components/auth/ProtectedRoute";
-import CadastroExtra from "./pages/CadastroExtra";
+import ProviderPaciente from "./pages/ProviderPaciente";
 
 export default function App() {
   return (
     <HelmetProvider>
-      <Helmet>
-        <title>Angels of Care | Cuidadores de Idosos em Chapecó</title>
-        <meta
-          name="description"
-          content="Cuidado humanizado para idosos, pós-operatório e gestantes em Chapecó/SC. Profissionais verificados e atendimento domiciliar 24h."
-        />
-
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://www.angelsofcare.com.br/" />
-        <meta
-          property="og:title"
-          content="Angels of Care - Cuidado que conforta"
-        />
-        <meta
-          property="og:description"
-          content="Precisa de cuidador em Chapecó? Conheça nossa equipe qualificada. Atendimento domiciliar e hospitalar."
-        />
-        <meta
-          property="og:image"
-          content="https://www.angelsofcare.com.br/imagem-de-capa.jpg"
-        />
-
-        <meta name="theme-color" content="#4B5E4F" />
-      </Helmet>
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Home />} />
@@ -58,7 +34,7 @@ export default function App() {
           <Route path="/seja-parceiro-extra" element={<CadastroExtra />} />
           <Route path="/login" element={<LoginPage />} />
 
-          <Route element={<ProtectedRoute />}>
+          <Route element={<ProtectedRoute restrictTo="admin" />}>
             <Route path="/admin" element={<Dashboard />} />
 
             <Route
@@ -89,6 +65,10 @@ export default function App() {
               path="/admin/escalas/confirmacao"
               element={<AdminConfirmacaoEscala />}
             />
+          </Route>
+          <Route element={<ProtectedRoute restrictTo="prestador" />}>
+            <Route path="/app/home" element={<ProviderHome />} />
+            <Route path="/app/pacientes/:id" element={<ProviderPaciente />} />
           </Route>
         </Routes>
       </BrowserRouter>
