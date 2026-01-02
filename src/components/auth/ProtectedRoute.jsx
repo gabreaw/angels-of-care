@@ -24,26 +24,39 @@ export default function ProtectedRoute({ restrictTo }) {
         return;
       }
 
-      const { data: funcionario, error } = await supabase
+      let roleEncontrada = null;
+
+      const { data: funcionario } = await supabase
         .from("funcionarios")
         .select("role")
         .eq("auth_id", user.id)
-        .single();
+        .maybeSingle();
 
-      if (error || !funcionario) {
-        console.error("Erro ao verificar permissão:", error);
-        setIsAuthorized(false);
-        setLoading(false);
-        return;
+      if (funcionario) {
+        roleEncontrada = funcionario.role; 
+      } else {
+        const { data: paciente } = await supabase
+          .from("pacientes")
+          .select("id")
+          .eq("auth_id", user.id)
+          .maybeSingle();
+
+        if (paciente) {
+          roleEncontrada = "cliente";
+        }
       }
 
-      setUserRole(funcionario.role);
-      if (!restrictTo || restrictTo === funcionario.role) {
+      setUserRole(roleEncontrada);
+
+      if (!roleEncontrada) {
+        setIsAuthorized(false); 
+      } else if (!restrictTo || restrictTo === roleEncontrada) {
         setIsAuthorized(true);
       } else {
         setIsAuthorized(false);
       }
     } catch (error) {
+      console.error("Erro de permissão:", error);
       setIsAuthorized(false);
     } finally {
       setLoading(false);
@@ -53,18 +66,15 @@ export default function ProtectedRoute({ restrictTo }) {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
     );
   }
 
   if (!isAuthorized) {
-    if (restrictTo === "admin" && userRole === "prestador") {
-      return <Navigate to="/app/home" replace />;
-    }
-    if (restrictTo === "prestador" && userRole === "admin") {
-      return <Navigate to="/admin" replace />;
-    }
+    if (userRole === "cliente") return <Navigate to="/portal/home" replace />;
+    if (userRole === "prestador") return <Navigate to="/app/home" replace />;
+    if (userRole === "admin") return <Navigate to="/admin" replace />;
 
     return <Navigate to="/login" state={{ from: location }} replace />;
   }

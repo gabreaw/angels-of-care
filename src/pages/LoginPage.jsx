@@ -20,24 +20,33 @@ export default function LoginPage() {
         email,
         password,
       });
-
       if (error) throw error;
-
-      const { data: funcionario, error: funcError } = await supabase
+      const { data: funcionario } = await supabase
         .from("funcionarios")
         .select("role")
         .eq("auth_id", user.id)
-        .single();
+        .maybeSingle();
 
-      if (funcError || !funcionario) {
-        throw new Error("Perfil de funcionário não encontrado.");
+      if (funcionario) {
+        if (funcionario.role === "admin") {
+          navigate("/admin");
+        } else {
+          navigate("/app/home");
+        }
+        return;
+      }
+      const { data: cliente } = await supabase
+        .from("pacientes")
+        .select("id")
+        .eq("auth_id", user.id)
+        .maybeSingle();
+
+      if (cliente) {
+        navigate("/portal/home");
+        return;
       }
 
-      if (funcionario.role === "admin") {
-        navigate("/admin");
-      } else {
-        navigate("/app/home");
-      }
+      throw new Error("Usuário sem perfil associado.");
     } catch (error) {
       alert("Erro ao entrar: " + error.message);
       await supabase.auth.signOut();

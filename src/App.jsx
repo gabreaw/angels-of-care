@@ -23,6 +23,7 @@ import ProviderHome from "./pages/ProviderHome";
 
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import ProviderPaciente from "./pages/ProviderPaciente";
+import ClientHome from "./pages/ClientHome";
 
 export default function App() {
   return (
@@ -69,6 +70,9 @@ export default function App() {
           <Route element={<ProtectedRoute restrictTo="prestador" />}>
             <Route path="/app/home" element={<ProviderHome />} />
             <Route path="/app/pacientes/:id" element={<ProviderPaciente />} />
+          </Route>
+          <Route element={<ProtectedRoute restrictTo="cliente" />}>
+            <Route path="/portal/home" element={<ClientHome />} />
           </Route>
         </Routes>
       </BrowserRouter>

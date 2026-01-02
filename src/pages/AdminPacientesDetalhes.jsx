@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import { createClient } from "@supabase/supabase-js"; // IMPORTANTE: Para criar login sem deslogar
 import {
   ArrowLeft,
   User,
@@ -16,10 +17,16 @@ import {
   Calendar,
   Clock,
   Paperclip,
-  Upload,
   Edit,
   X,
+  Lock, // Novo
+  CheckCircle, // Novo
+  AlertTriangle, // Novo
 } from "lucide-react";
+
+// Configuração para cliente temporário (apenas para criar usuários)
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export default function AdminPacientesDetalhes() {
   const { id } = useParams();
@@ -28,8 +35,16 @@ export default function AdminPacientesDetalhes() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("geral");
 
+  // Edição de Dados Básicos
   const [editModalOpen, setEditModalOpen] = useState(false);
 
+  // Controle de Acesso Família (NOVO)
+  const [modalAcessoOpen, setModalAcessoOpen] = useState(false);
+  const [emailFamilia, setEmailFamilia] = useState("");
+  const [novaSenha, setNovaSenha] = useState("");
+  const [criandoAcesso, setCriandoAcesso] = useState(false);
+
+  // Listas de Dados
   const [historico, setHistorico] = useState([]);
   const [medicamentos, setMedicamentos] = useState([]);
   const [sinais, setSinais] = useState([]);
@@ -56,6 +71,10 @@ export default function AdminPacientesDetalhes() {
       return;
     }
     setPaciente(pac);
+    // Preenche o email da família se já existir
+    if (pac.email_responsavel) {
+      setEmailFamilia(pac.email_responsavel);
+    }
 
     const [histRes, medRes, sinaisRes, evoRes, plantoesRes, funcRes] =
       await Promise.all([
@@ -102,6 +121,75 @@ export default function AdminPacientesDetalhes() {
 
     setLoading(false);
   }
+
+  // --- NOVA FUNÇÃO: CRIAR ACESSO FAMÍLIA ---
+  const handleCriarAcesso = async (e) => {
+    e.preventDefault();
+    if (novaSenha.length < 6) {
+      alert("A senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+    setCriandoAcesso(true);
+
+    try {
+      // 1. Cria cliente temporário
+      const tempSupabase = createClient(supabaseUrl, supabaseKey);
+
+      // 2. Cria usuário no Auth
+      const { data: authData, error: authError } =
+        await tempSupabase.auth.signUp({
+          email: emailFamilia,
+          password: novaSenha,
+        });
+
+      if (authError) {
+        if (authError.message.includes("already registered")) {
+          alert("Este email já tem cadastro. Tentaremos apenas vincular.");
+        } else {
+          throw authError;
+        }
+      }
+
+      // Se criou ou já existia, tentamos vincular.
+      // Nota: authData.user pode ser null se o usuário já existia (segurança do Supabase).
+      // Nesse caso, o vínculo exato precisaria do ID, mas se acabou de criar, temos o ID.
+
+      let userUuid = authData.user?.id;
+
+      if (!userUuid && authError?.message.includes("already registered")) {
+        throw new Error(
+          "Email já cadastrado! Por segurança, exclua o usuário no menu Authentication para recriar, ou use outro email."
+        );
+      }
+
+      if (userUuid) {
+        // 3. Atualiza tabela pacientes
+        const { error: updateError } = await supabase
+          .from("pacientes")
+          .update({
+            auth_id: userUuid,
+            email_responsavel: emailFamilia,
+          })
+          .eq("id", id);
+
+        if (updateError) throw updateError;
+
+        setPaciente((prev) => ({
+          ...prev,
+          auth_id: userUuid,
+          email_responsavel: emailFamilia,
+        }));
+        alert(
+          `Acesso criado com sucesso!\nLogin: ${emailFamilia}\nSenha: ${novaSenha}`
+        );
+        setModalAcessoOpen(false);
+      }
+    } catch (error) {
+      alert("Erro ao criar acesso: " + error.message);
+    } finally {
+      setCriandoAcesso(false);
+    }
+  };
 
   const atualizarPaciente = async (e) => {
     e.preventDefault();
@@ -361,81 +449,157 @@ export default function AdminPacientesDetalhes() {
         </div>
 
         {activeTab === "geral" && (
-          <div className="bg-white rounded-3xl shadow-lg border border-beige overflow-hidden p-8 grid md:grid-cols-2 gap-10">
-            <div className="space-y-6">
-              <div className="flex items-start gap-3">
-                <div className="bg-blue-50 p-2 rounded-lg">
-                  <User className="text-blue-600" size={20} />
+          <div className="space-y-6">
+            {/* --- BLOCO DE ACESSO (Portal da Família) --- */}
+            <section className="bg-amber-50 rounded-3xl p-6 border border-amber-200 shadow-sm">
+              <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="bg-amber-100 p-3 rounded-full text-amber-700">
+                    <Lock size={24} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-amber-900 text-lg">
+                      Acesso da Família
+                    </h3>
+                    <p className="text-sm text-amber-800/80">
+                      {paciente.auth_id
+                        ? `Acesso ativo vinculado a: ${
+                            paciente.email_responsavel ||
+                            "(Email não registrado)"
+                          }`
+                        : "A família ainda não possui login para ver o portal."}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-primary mb-1">
-                    Dados Pessoais
-                  </h3>
-                  <p className="text-sm text-darkText/80">
-                    CPF: {paciente.cpf_paciente}
-                  </p>
-                  <p className="text-sm text-darkText/80">
-                    Nascimento: {paciente.data_nascimento}
-                  </p>
-                  <span className="mt-2 inline-block text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full font-bold">
-                    {paciente.grau_dependencia}
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="bg-yellow-50 p-2 rounded-lg">
-                  <Activity className="text-yellow-600" size={20} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-primary mb-1">
-                    Diagnóstico & Cuidados
-                  </h3>
-                  <p className="text-darkText font-bold">
-                    {paciente.diagnostico}
-                  </p>
-                  <p className="text-sm text-darkText/70 mt-2 bg-paper p-3 rounded-lg border border-beige">
-                    {paciente.cuidados_especificos || "Sem observações."}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="space-y-6">
-              <div className="flex items-start gap-3">
-                <div className="bg-green-50 p-2 rounded-lg">
-                  <MapPin className="text-green-600" size={20} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-primary mb-1">Endereço</h3>
-                  <p className="text-sm text-darkText/80">
-                    {paciente.endereco_completo}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="bg-purple-50 p-2 rounded-lg">
-                  <Phone className="text-purple-600" size={20} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-primary mb-1">Responsável</h3>
-                  <p className="text-darkText font-bold">
-                    {paciente.nome_responsavel}
-                  </p>
-                  <a
-                    href={`https://wa.me/${paciente.telefone_responsavel?.replace(
-                      /\D/g,
-                      ""
-                    )}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-green-600 text-sm font-bold hover:underline"
+                {paciente.auth_id ? (
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg border border-amber-200 shadow-sm text-green-700 font-bold">
+                      <CheckCircle size={18} /> Acesso Configurado
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (
+                          !window.confirm(
+                            "Tem certeza? Isso vai remover o acesso da família ao portal."
+                          )
+                        )
+                          return;
+                        try {
+                          await supabase
+                            .from("pacientes")
+                            .update({ auth_id: null, email_responsavel: null })
+                            .eq("id", id);
+                          setPaciente((prev) => ({
+                            ...prev,
+                            auth_id: null,
+                            email_responsavel: null,
+                          }));
+                          alert(
+                            "Acesso removido. Você pode criar um novo agora."
+                          );
+                        } catch (err) {
+                          alert("Erro ao remover: " + err.message);
+                        }
+                      }}
+                      className="bg-white hover:bg-red-50 text-red-500 p-2 rounded-lg border border-red-100 transition-colors"
+                      title="Remover acesso / Redefinir"
+                    >
+                      <Trash2 size={20} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmailFamilia(paciente.email_responsavel || "");
+                      setModalAcessoOpen(true);
+                    }}
+                    className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-xl shadow transition-all"
                   >
-                    {paciente.telefone_responsavel} ↗
-                  </a>
+                    Criar Login da Família
+                  </button>
+                )}
+              </div>
+            </section>
+            <div className="bg-white rounded-3xl shadow-lg border border-beige overflow-hidden p-8 grid md:grid-cols-2 gap-10">
+              <div className="space-y-6">
+                <div className="flex items-start gap-3">
+                  <div className="bg-blue-50 p-2 rounded-lg">
+                    <User className="text-blue-600" size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-primary mb-1">
+                      Dados Pessoais
+                    </h3>
+                    <p className="text-sm text-darkText/80">
+                      CPF: {paciente.cpf_paciente}
+                    </p>
+                    <p className="text-sm text-darkText/80">
+                      Nascimento: {paciente.data_nascimento}
+                    </p>
+                    <span className="mt-2 inline-block text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full font-bold">
+                      {paciente.grau_dependencia}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="bg-yellow-50 p-2 rounded-lg">
+                    <Activity className="text-yellow-600" size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-primary mb-1">
+                      Diagnóstico & Cuidados
+                    </h3>
+                    <p className="text-darkText font-bold">
+                      {paciente.diagnostico}
+                    </p>
+                    <p className="text-sm text-darkText/70 mt-2 bg-paper p-3 rounded-lg border border-beige">
+                      {paciente.cuidados_especificos || "Sem observações."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-6">
+                <div className="flex items-start gap-3">
+                  <div className="bg-green-50 p-2 rounded-lg">
+                    <MapPin className="text-green-600" size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-primary mb-1">Endereço</h3>
+                    <p className="text-sm text-darkText/80">
+                      {paciente.endereco_completo}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="bg-purple-50 p-2 rounded-lg">
+                    <Phone className="text-purple-600" size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-primary mb-1">Responsável</h3>
+                    <p className="text-darkText font-bold">
+                      {paciente.nome_responsavel}
+                    </p>
+                    <a
+                      href={`https://wa.me/${paciente.telefone_responsavel?.replace(
+                        /\D/g,
+                        ""
+                      )}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-green-600 text-sm font-bold hover:underline"
+                    >
+                      {paciente.telefone_responsavel} ↗
+                    </a>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         )}
+
+        {/* --- ABAS RESTANTES (MANTIDAS IGUAIS) --- */}
         {activeTab === "evolucao" && (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
             <div className="xl:col-span-1">
@@ -1075,6 +1239,7 @@ export default function AdminPacientesDetalhes() {
           </div>
         )}
       </div>
+
       {editModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl border border-beige max-h-[90vh] overflow-y-auto">
@@ -1197,6 +1362,62 @@ export default function AdminPacientesDetalhes() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL DE CRIAR ACESSO (FAMÍLIA) --- */}
+      {modalAcessoOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 border border-amber-100">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-amber-900">
+                Acesso da Família
+              </h3>
+              <button onClick={() => setModalAcessoOpen(false)}>
+                <X size={24} className="text-gray-400 hover:text-red-500" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Crie um login para que a família possa acessar o{" "}
+                <strong>Portal do Cliente</strong> e acompanhar as evoluções.
+              </p>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">
+                  Email de Login
+                </label>
+                <input
+                  type="email"
+                  value={emailFamilia}
+                  onChange={(e) => setEmailFamilia(e.target.value)}
+                  className="w-full p-3 border rounded-lg focus:border-amber-500 outline-none"
+                  placeholder="ex: familia@email.com"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">
+                  Senha Provisória
+                </label>
+                <input
+                  type="text"
+                  value={novaSenha}
+                  onChange={(e) => setNovaSenha(e.target.value)}
+                  className="w-full p-3 border rounded-lg focus:border-amber-500 outline-none text-center font-mono tracking-widest"
+                  placeholder="Mínimo 6 caracteres"
+                />
+              </div>
+              <button
+                onClick={handleCriarAcesso}
+                disabled={criandoAcesso}
+                className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-xl shadow-md transition-all mt-2"
+              >
+                {criandoAcesso
+                  ? "Criando e Vinculando..."
+                  : "Confirmar e Criar Acesso"}
+              </button>
+            </div>
           </div>
         </div>
       )}
