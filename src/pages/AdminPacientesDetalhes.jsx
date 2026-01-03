@@ -450,7 +450,6 @@ export default function AdminPacientesDetalhes() {
 
         {activeTab === "geral" && (
           <div className="space-y-6">
-            {/* --- BLOCO DE ACESSO (Portal da Família) --- */}
             <section className="bg-amber-50 rounded-3xl p-6 border border-amber-200 shadow-sm">
               <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                 <div className="flex items-center gap-4">

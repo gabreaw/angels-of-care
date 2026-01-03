@@ -1,13 +1,7 @@
 import React, { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { Link } from "react-router-dom";
-import {
-  CheckCircle,
-  AlertCircle,
-  FileText,
-  MapPin,
-  CreditCard,
-} from "lucide-react";
+import { CheckCircle, FileText, MapPin, CreditCard } from "lucide-react";
 
 export default function CadastroParceiro() {
   const [loading, setLoading] = useState(false);
@@ -54,6 +48,7 @@ export default function CadastroParceiro() {
       .replace(/(\d{3})(\d)/, "$1.$2")
       .replace(/(\d{3})(\d{1,2})/, "$1-$2")
       .replace(/(-\d{2})\d+?$/, "$1");
+
   const mascaraCNPJ = (valor) =>
     valor
       .replace(/\D/g, "")
@@ -62,12 +57,14 @@ export default function CadastroParceiro() {
       .replace(/(\d{3})(\d)/, "$1/$2")
       .replace(/(\d{4})(\d)/, "$1-$2")
       .replace(/(-\d{2})\d+?$/, "$1");
+
   const mascaraTelefone = (valor) =>
     valor
       .replace(/\D/g, "")
       .replace(/^(\d{2})(\d)/g, "($1) $2")
       .replace(/(\d)(\d{4})$/, "$1-$2")
       .slice(0, 15);
+
   const mascaraCEP = (valor) =>
     valor
       .replace(/\D/g, "")
@@ -120,8 +117,8 @@ export default function CadastroParceiro() {
 
   const limparNomeArquivo = (nome) => {
     return nome
-      .normalize("NFD") 
-      .replace(/[\u0300-\u036f]/g, "") 
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
       .replace(/\s+/g, "_")
       .replace(/[^a-zA-Z0-9._-]/g, "");
   };
@@ -152,7 +149,7 @@ export default function CadastroParceiro() {
       const dadosLimpos = {
         ...formData,
         cpf: formData.cpf.replace(/\D/g, ""),
-        cnpj: formData.cnpj.replace(/\D/g, ""),
+        cnpj: formData.cnpj ? formData.cnpj.replace(/\D/g, "") : "",
         cep: formData.cep.replace(/\D/g, ""),
         telefone: `+55${formData.telefone.replace(/\D/g, "")}`,
       };
@@ -161,7 +158,9 @@ export default function CadastroParceiro() {
         arquivos.doc_identidade,
         "identidade"
       );
+
       const linksCnpj = await uploadMultiplos(arquivos.doc_cartao_cnpj, "cnpj");
+
       const linksEndereco = await uploadMultiplos(
         arquivos.doc_comprovante_endereco,
         "endereco"
@@ -175,7 +174,7 @@ export default function CadastroParceiro() {
           ...dadosLimpos,
           endereco_completo: enderecoFormatado,
           doc_identidade_url: linksIdentidade,
-          doc_cartao_cnpj_url: linksCnpj,
+          doc_cartao_cnpj_url: linksCnpj, // Pode ser null se não tiver arquivo
           doc_comprovante_endereco_url: linksEndereco,
           doc_coren_url: linksCoren,
           status: "pendente",
@@ -259,7 +258,7 @@ export default function CadastroParceiro() {
                   />
                   <input
                     name="orgao_emissor"
-                    placeholder="Org. Emissor (Ex: SSP/SC)"
+                    placeholder="Org. Emissor"
                     onChange={handleChange}
                     required
                     className="input-padrao"
@@ -401,7 +400,7 @@ export default function CadastroParceiro() {
 
           <section className="bg-blue-50/50 p-6 rounded-xl border border-blue-100">
             <h3 className="text-xl font-bold text-primary mb-4 flex items-center gap-2">
-              <CreditCard size={20} /> Dados Bancários & MEI
+              <CreditCard size={20} /> Dados Bancários & Profissional
             </h3>
             <div className="grid md:grid-cols-2 gap-4 mb-4">
               <select
@@ -413,21 +412,23 @@ export default function CadastroParceiro() {
                 <option>Cuidador</option>
                 <option>Enfermeiro</option>
               </select>
+
               <input
                 name="coren_numero"
                 value={formData.coren_numero}
-                placeholder="Nº Coren"
+                placeholder="Nº Coren (Opcional)"
                 onChange={handleChange}
                 className="input-padrao"
               />
+
               <input
                 name="cnpj"
                 value={formData.cnpj}
-                placeholder="CNPJ (MEI)"
+                placeholder="CNPJ (MEI) - Opcional"
                 onChange={handleChange}
-                required
                 className="input-padrao"
               />
+
               <input
                 name="chave_pix"
                 placeholder="Chave PIX"
@@ -502,13 +503,14 @@ export default function CadastroParceiro() {
                 files={arquivos.doc_identidade}
                 required
               />
+
               <UploadField
-                label="Cartão CNPJ"
+                label="Cartão CNPJ (Opcional)"
                 name="doc_cartao_cnpj"
                 onChange={handleFileChange}
                 files={arquivos.doc_cartao_cnpj}
-                required
               />
+
               <UploadField
                 label="Comprovante de Endereço"
                 name="doc_comprovante_endereco"
@@ -516,8 +518,9 @@ export default function CadastroParceiro() {
                 files={arquivos.doc_comprovante_endereco}
                 required
               />
+
               <UploadField
-                label="Carteira do Coren (Se houver)"
+                label="Carteira do Coren (Opcional)"
                 name="doc_coren"
                 onChange={handleFileChange}
                 files={arquivos.doc_coren}
