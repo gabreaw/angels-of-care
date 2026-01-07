@@ -119,12 +119,10 @@ export default function CadastroExtra() {
 
       const enderecoFormatado = `${formData.logradouro}, ${formData.numero} - ${formData.bairro}, ${formData.cidade}/${formData.estado} (CEP: ${formData.cep})`;
 
-      // Inserção simplificada sem URLs de documentos
       const { error } = await supabase.from("funcionarios").insert([
         {
           ...dadosLimpos,
           endereco_completo: enderecoFormatado,
-          // Removemos as colunas de documentos, ou enviamos null/array vazio se o banco exigir
           doc_identidade_url: [],
           doc_cartao_cnpj_url: [],
           doc_comprovante_endereco_url: [],

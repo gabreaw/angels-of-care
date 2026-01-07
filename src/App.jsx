@@ -18,12 +18,12 @@ import AdminPacientesNovo from "./pages/AdminPacientesNovo";
 import AdminPacientesDetalhes from "./pages/AdminPacientesDetalhes";
 import AdminEscalas from "./pages/AdminEscalas";
 import AdminConfirmacaoEscala from "./pages/AdminConfirmacaoEscala";
-
 import ProviderHome from "./pages/ProviderHome";
-
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import ProviderPaciente from "./pages/ProviderPaciente";
 import ClientHome from "./pages/ClientHome";
+import TrabalheConosco from "./pages/TrabalheConosco";
+import AdminCandidatos from "./pages/AdminCandidatos";
 
 export default function App() {
   return (
@@ -34,7 +34,7 @@ export default function App() {
           <Route path="/seja-parceiro" element={<CadastroParceiro />} />
           <Route path="/seja-parceiro-extra" element={<CadastroExtra />} />
           <Route path="/login" element={<LoginPage />} />
-
+          <Route path="/trabalhe-conosco" element={<TrabalheConosco />} />
           <Route element={<ProtectedRoute restrictTo="admin" />}>
             <Route path="/admin" element={<Dashboard />} />
 
@@ -74,6 +74,10 @@ export default function App() {
           <Route element={<ProtectedRoute restrictTo="cliente" />}>
             <Route path="/portal/home" element={<ClientHome />} />
           </Route>
+          <Route
+            path="/admin/candidatos"
+            element={<AdminCandidatos />}
+          />
         </Routes>
       </BrowserRouter>
     </HelmetProvider>

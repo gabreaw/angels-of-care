@@ -1,11 +1,31 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
-import { Users, UserPlus, HeartPulse, LogOut } from "lucide-react";
-import { Calendar } from "lucide-react";
+import {
+  Users,
+  UserPlus,
+  HeartPulse,
+  LogOut,
+  Calendar,
+  Inbox,
+} from "lucide-react";
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const [candidatosCount, setCandidatosCount] = useState(0);
+
+  useEffect(() => {
+    checkCandidatos();
+  }, []);
+
+  async function checkCandidatos() {
+    const { count } = await supabase
+      .from("candidatos")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "novo");
+
+    setCandidatosCount(count || 0);
+  }
 
   const handleLogout = async () => {
     const { error } = await supabase.auth.signOut();
@@ -89,6 +109,26 @@ export default function Dashboard() {
           </h2>
           <p className="text-darkText/70">
             Mapa geral de plantões e confirmação de presença.
+          </p>
+        </Link>
+
+        <Link
+          to="/admin/candidatos"
+          className="bg-white p-8 rounded-2xl shadow-md border-2 border-blue-200 hover:border-blue-400 hover:shadow-xl hover:-translate-y-1 transition-all group relative overflow-hidden"
+        >
+          {candidatosCount > 0 && (
+            <div className="absolute top-4 right-4 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-full animate-pulse shadow-sm">
+              {candidatosCount} Novos
+            </div>
+          )}
+          <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-6 group-hover:bg-blue-100 transition-colors">
+            <Inbox className="w-8 h-8 text-blue-600" />
+          </div>
+          <h2 className="text-2xl font-serif text-primary font-bold mb-2">
+            Banco de Talentos
+          </h2>
+          <p className="text-darkText/70">
+            Currículos recebidos pelo site (Trabalhe Conosco).
           </p>
         </Link>
       </div>

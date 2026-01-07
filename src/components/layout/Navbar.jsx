@@ -1,47 +1,60 @@
 import React, { useState } from "react";
 import { Menu, X, Phone } from "lucide-react";
-import logoImg from "../../assets/logo.png"; 
+import { Link } from "react-router-dom"; // Importante para navegação interna
+import logoImg from "../../assets/logo.png";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
 
   const menuItems = [
-    { name: "Início", href: "#inicio" },
-    { name: "Serviços", href: "#servicos" },
-    { name: "Sobre Nós", href: "#sobre" },
+    { name: "Início", path: "/" },
+    { name: "Serviços", path: "/#servicos" }, // A barra / garante que volte pra home
+    { name: "Sobre Nós", path: "/#sobre" },
+    { name: "Trabalhe Conosco", path: "/trabalhe-conosco" }, // Novo Link
   ];
 
   return (
     <nav className="sticky top-0 z-50 w-full bg-paper border-b border-beige/40 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-20">
-          <div className="flex items-center gap-3 flex-shrink-0 cursor-pointer">
+          {/* LOGO */}
+          <Link
+            to="/"
+            className="flex items-center gap-3 flex-shrink-0 cursor-pointer"
+          >
             <img
               src={logoImg}
               alt="Angels of Care Logo"
               className="h-24 w-auto object-contain"
             />
-
             <span className="font-serif text-primary font-bold text-xl whitespace-nowrap hidden sm:block">
               Angels of Care
             </span>
-          </div>
+          </Link>
 
+          {/* MENU DESKTOP */}
           <div className="hidden md:flex items-center gap-8">
             {menuItems.map((item) => (
-              <a
+              <Link
                 key={item.name}
-                href={item.href}
-                className="text-darkText hover:text-primary font-medium transition-colors font-sans text-sm tracking-wide"
+                to={item.path}
+                className={`font-medium transition-colors font-sans text-sm tracking-wide ${
+                  item.name === "Trabalhe Conosco"
+                    ? "text-primary font-bold bg-primary/10 px-3 py-2 rounded-lg hover:bg-primary/20"
+                    : "text-darkText hover:text-primary"
+                }`}
               >
                 {item.name}
-              </a>
+              </Link>
             ))}
           </div>
 
+          {/* BOTÃO WHATSAPP */}
           <div className="hidden md:flex flex-shrink-0">
             <a
               href="https://wa.me/5549984220162"
+              target="_blank"
+              rel="noreferrer"
               className="bg-primary hover:bg-[#3A4A3E] text-white px-6 py-2.5 rounded-full font-bold transition-all flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-sm"
             >
               <Phone size={18} />
@@ -49,6 +62,7 @@ const Navbar = () => {
             </a>
           </div>
 
+          {/* BOTÃO MOBILE (HAMBURGUER) */}
           <div className="md:hidden flex items-center">
             <button
               onClick={() => setIsOpen(!isOpen)}
@@ -60,21 +74,28 @@ const Navbar = () => {
         </div>
       </div>
 
+      {/* MENU MOBILE */}
       {isOpen && (
         <div className="md:hidden bg-paper border-t border-beige absolute w-full left-0 shadow-xl">
           <div className="px-4 pt-2 pb-6 space-y-2">
             {menuItems.map((item) => (
-              <a
+              <Link
                 key={item.name}
-                href={item.href}
-                className="block px-3 py-3 rounded-lg text-base font-medium text-darkText hover:text-primary hover:bg-sage/10 transition-colors"
+                to={item.path}
+                className={`block px-3 py-3 rounded-lg text-base font-medium transition-colors ${
+                  item.name === "Trabalhe Conosco"
+                    ? "text-primary bg-primary/10 font-bold"
+                    : "text-darkText hover:text-primary hover:bg-sage/10"
+                }`}
                 onClick={() => setIsOpen(false)}
               >
                 {item.name}
-              </a>
+              </Link>
             ))}
             <a
               href="https://wa.me/5549984220162"
+              target="_blank"
+              rel="noreferrer"
               className="w-full mt-4 bg-primary text-white px-6 py-4 rounded-xl font-bold flex items-center justify-center gap-2"
             >
               <Phone size={20} />
