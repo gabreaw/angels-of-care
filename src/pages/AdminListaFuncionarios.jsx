@@ -44,21 +44,18 @@ export default function AdminListaFuncionarios() {
     }
   }
 
-  // Filtragem Geral
   const filteredAll = funcionarios.filter(
     (func) =>
       func.nome_completo.toLowerCase().includes(searchTerm.toLowerCase()) ||
       func.funcao.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
-  // Separação das Listas
-  const ativos = filteredAll.filter((f) => f.status === "ativo");
+  
+  const ativos = filteredAll.filter((f) => f.status === "ativo" && f.funcao !== "Administrador");
   const inativos = filteredAll.filter((f) => f.status !== "ativo");
+  const admin = filteredAll.filter((f) => f.funcao === "Administrador");
 
-  // Componente interno para reutilizar a tabela sem duplicar código HTML gigante
   const TabelaFuncionarios = ({ dados, titulo, icone: Icone, corTitulo }) => (
     <div className="bg-white rounded-2xl shadow-lg border border-beige overflow-hidden mb-8">
-      {/* Cabeçalho da Tabela */}
       <div className="p-4 bg-sage/10 border-b border-beige flex items-center gap-2">
         <Icone size={20} className={corTitulo} />
         <h3 className={`font-bold text-lg ${corTitulo}`}>
@@ -170,7 +167,6 @@ export default function AdminListaFuncionarios() {
   return (
     <div className="min-h-screen bg-paper p-4 md:p-8">
       <div className="max-w-6xl mx-auto">
-        {/* HEADER E BUSCA (MANTIDOS IGUAIS) */}
         <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
           <div>
             <h1 className="text-3xl font-serif text-primary font-bold">
@@ -206,18 +202,21 @@ export default function AdminListaFuncionarios() {
           </div>
         ) : (
           <div className="space-y-8">
-            {/* TABELA 1: ATIVOS (EM CIMA) */}
             <TabelaFuncionarios
               dados={ativos}
               titulo="Prestadores Ativos"
               icone={UserCheck}
               corTitulo="text-green-700"
             />
-
-            {/* TABELA 2: INATIVOS (EMBAIXO) */}
             <TabelaFuncionarios
               dados={inativos}
               titulo="Inativos / Pendentes"
+              icone={UserX}
+              corTitulo="text-gray-600"
+            />
+            <TabelaFuncionarios
+              dados={admin}
+              titulo="Administradores"
               icone={UserX}
               corTitulo="text-gray-600"
             />

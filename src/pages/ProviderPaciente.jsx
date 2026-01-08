@@ -1,26 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
-import {
-  ArrowLeft,
-  User,
-  Activity,
-  Pill,
-  FileText,
-  Plus,
-  Clock,
-  MapPin,
-  CheckSquare,
-  UploadCloud,
-  Paperclip,
-} from "lucide-react";
+import { ArrowLeft, FileText, Pill, MapPin, Paperclip } from "lucide-react";
 
 export default function ProviderPaciente() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [paciente, setPaciente] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("evolucao"); 
+  const [activeTab, setActiveTab] = useState("evolucao");
   const [uploading, setUploading] = useState(false);
 
   const [evolucoes, setEvolucoes] = useState([]);
@@ -67,60 +55,74 @@ export default function ProviderPaciente() {
     setUploading(true);
     const form = e.target;
 
-    // Pega usuário atual para registrar o nome
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    const { data: func } = await supabase
-      .from("funcionarios")
-      .select("nome_completo")
-      .eq("auth_id", user.id)
-      .single();
+    try {
+      // Pega usuário atual para registrar o nome
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-    const file = form.anexo.files[0];
-    let arquivoUrl = null;
+      // Busca o nome do prestador na tabela funcionarios
+      let nomePrestador = "Prestador";
+      if (user) {
+        const { data: func } = await supabase
+          .from("funcionarios")
+          .select("nome_completo")
+          .eq("auth_id", user.id)
+          .maybeSingle(); // Usa maybeSingle para não dar erro se não achar
 
-    if (file) {
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
-      const filePath = `${id}/${fileName}`;
-      const { error: upErr } = await supabase.storage
-        .from("evolucoes")
-        .upload(filePath, file);
-      if (!upErr) {
-        const { data: urlData } = supabase.storage
-          .from("evolucoes")
-          .getPublicUrl(filePath);
-        arquivoUrl = urlData.publicUrl;
+        if (func) nomePrestador = func.nome_completo;
       }
-    }
 
-    const novo = {
-      paciente_id: id,
-      profissional_nome: func?.nome_completo || "Prestador",
-      turno: form.turno.value,
-      texto_evolucao: form.texto.value,
-      diurese_presente: form.diurese.checked,
-      evacuacao_presente: form.evacuacao.checked,
-      aspiracao_tqt: form.aspiracao.checked,
-      mudanca_decubito: form.decubito.checked,
-      higiene_realizada: form.higiene.checked,
-      arquivo_url: arquivoUrl,
-    };
+      const file = form.anexo.files[0];
+      let arquivoUrl = null;
 
-    const { data, error } = await supabase
-      .from("evolucoes")
-      .insert([novo])
-      .select();
+      if (file) {
+        const fileExt = file.name.split(".").pop();
+        const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
+        const filePath = `${id}/${fileName}`;
+        const { error: upErr } = await supabase.storage
+          .from("evolucoes")
+          .upload(filePath, file);
 
-    if (!error && data) {
-      setEvolucoes([data[0], ...evolucoes]);
-      form.reset();
-      alert("Evolução registrada com sucesso!");
-    } else {
+        if (!upErr) {
+          const { data: urlData } = supabase.storage
+            .from("evolucoes")
+            .getPublicUrl(filePath);
+          arquivoUrl = urlData.publicUrl;
+        }
+      }
+
+      // CORREÇÃO AQUI: O uso do ?. (optional chaining) evita o erro se o campo não existir no HTML
+      const novo = {
+        paciente_id: id,
+        profissional_nome: nomePrestador,
+        turno: form.turno.value,
+        texto_evolucao: form.texto.value,
+        diurese_presente: form.diurese?.checked || false,
+        evacuacao_presente: form.evacuacao?.checked || false,
+        aspiracao_tqt: form.aspiracao?.checked || false, // Adicionei o input lá embaixo também
+        mudanca_decubito: form.decubito?.checked || false,
+        higiene_realizada: form.higiene?.checked || false,
+        arquivo_url: arquivoUrl,
+      };
+
+      const { data, error } = await supabase
+        .from("evolucoes")
+        .insert([novo])
+        .select();
+
+      if (!error && data) {
+        setEvolucoes([data[0], ...evolucoes]);
+        form.reset();
+        alert("Evolução registrada com sucesso!");
+      } else {
+        throw new Error(error.message);
+      }
+    } catch (error) {
       alert("Erro ao salvar: " + error.message);
+    } finally {
+      setUploading(false);
     }
-    setUploading(false);
   };
 
   if (loading)
@@ -199,38 +201,47 @@ export default function ProviderPaciente() {
                   required
                 ></textarea>
 
+                {/* ADICIONEI O CAMPO ASPIRAÇÃO QUE FALTAVA */}
                 <div className="grid grid-cols-2 gap-2">
-                  <label className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                  <label className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100 cursor-pointer">
                     <input
                       type="checkbox"
                       name="diurese"
                       className="accent-primary"
-                    />{" "}
+                    />
                     <span className="text-xs">Diurese</span>
                   </label>
-                  <label className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                  <label className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100 cursor-pointer">
                     <input
                       type="checkbox"
                       name="evacuacao"
                       className="accent-primary"
-                    />{" "}
+                    />
                     <span className="text-xs">Evacuação</span>
                   </label>
-                  <label className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                  <label className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100 cursor-pointer">
                     <input
                       type="checkbox"
                       name="higiene"
                       className="accent-primary"
-                    />{" "}
+                    />
                     <span className="text-xs">Higiene</span>
                   </label>
-                  <label className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                  <label className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100 cursor-pointer">
                     <input
                       type="checkbox"
                       name="decubito"
                       className="accent-primary"
-                    />{" "}
+                    />
                     <span className="text-xs">Decúbito</span>
+                  </label>
+                  <label className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      name="aspiracao"
+                      className="accent-primary"
+                    />
+                    <span className="text-xs">Aspiração</span>
                   </label>
                 </div>
 
@@ -269,7 +280,12 @@ export default function ProviderPaciente() {
                       {evo.turno}
                     </span>
                     <span className="text-xs text-gray-400">
-                      {new Date(evo.created_at).toLocaleDateString("pt-BR")}
+                      {new Date(evo.created_at).toLocaleDateString("pt-BR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                     </span>
                   </div>
                   <p className="text-sm text-gray-600 line-clamp-3">
@@ -280,6 +296,8 @@ export default function ProviderPaciente() {
             </div>
           </>
         )}
+
+        {/* ... Restante das abas (Info e Meds) iguais ao original ... */}
         {activeTab === "info" && (
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-6">
             <div>
@@ -327,6 +345,7 @@ export default function ProviderPaciente() {
             </div>
           </div>
         )}
+
         {activeTab === "meds" && (
           <div className="space-y-3">
             {medicamentos.length === 0 && (
