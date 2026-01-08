@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Menu, X, Phone } from "lucide-react";
-import { Link } from "react-router-dom"; // Importante para navegação interna
+import { Link } from "react-router-dom";
 import logoImg from "../../assets/logo.png";
 
 const Navbar = () => {
@@ -8,16 +8,15 @@ const Navbar = () => {
 
   const menuItems = [
     { name: "Início", path: "/" },
-    { name: "Serviços", path: "/#servicos" }, // A barra / garante que volte pra home
+    { name: "Serviços", path: "/#servicos" }, 
     { name: "Sobre Nós", path: "/#sobre" },
-    { name: "Trabalhe Conosco", path: "/trabalhe-conosco" }, // Novo Link
+    { name: "Trabalhe Conosco", path: "/trabalhe-conosco" }, 
   ];
 
   return (
     <nav className="sticky top-0 z-50 w-full bg-paper border-b border-beige/40 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-20">
-          {/* LOGO */}
           <Link
             to="/"
             className="flex items-center gap-3 flex-shrink-0 cursor-pointer"
@@ -31,8 +30,6 @@ const Navbar = () => {
               Angels of Care
             </span>
           </Link>
-
-          {/* MENU DESKTOP */}
           <div className="hidden md:flex items-center gap-8">
             {menuItems.map((item) => (
               <Link
@@ -48,8 +45,6 @@ const Navbar = () => {
               </Link>
             ))}
           </div>
-
-          {/* BOTÃO WHATSAPP */}
           <div className="hidden md:flex flex-shrink-0">
             <a
               href="https://wa.me/5549984220162"
@@ -61,8 +56,6 @@ const Navbar = () => {
               <span>Fale Conosco</span>
             </a>
           </div>
-
-          {/* BOTÃO MOBILE (HAMBURGUER) */}
           <div className="md:hidden flex items-center">
             <button
               onClick={() => setIsOpen(!isOpen)}
@@ -73,8 +66,6 @@ const Navbar = () => {
           </div>
         </div>
       </div>
-
-      {/* MENU MOBILE */}
       {isOpen && (
         <div className="md:hidden bg-paper border-t border-beige absolute w-full left-0 shadow-xl">
           <div className="px-4 pt-2 pb-6 space-y-2">

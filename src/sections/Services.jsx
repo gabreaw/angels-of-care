@@ -1,27 +1,27 @@
 import React from "react";
-import { Heart, Stethoscope, Baby, Building2 } from "lucide-react";
+import { Heart, Stethoscope, Building2, Zap } from "lucide-react";
 
 export default function Services() {
   const services = [
     {
       icon: Heart,
-      title: "Cuidado com Idosos",
-      desc: "Auxílio na rotina, higiene, medicação e, principalmente, companhia para combater a solidão.",
+      title: "Cuidados com Idosos",
+      desc: "Auxílio completo na rotina: higiene, alimentação, medicação e, principalmente, companhia e afeto para combater a solidão.",
     },
     {
       icon: Stethoscope,
-      title: "Pós-Operatório",
-      desc: "Suporte profissional na recuperação em casa. Segurança para o paciente e descanso para a família.",
+      title: "Pós-Operatório e Cirúrgico",
+      desc: "Segurança total na recuperação em casa. Realizamos curativos, administração de medicamentos e monitoramento de sinais vitais.",
     },
     {
-      icon: Baby,
-      title: "Gestantes e Crianças",
-      desc: "Apoio especializado para mães e bebês, garantindo noites tranquilas e auxílio nos primeiros cuidados.",
+      icon: Building2,
+      title: "Acompanhamento Hospitalar",
+      desc: "Seu familiar nunca ficará sozinho. Oferecemos presença e suporte profissional durante internações para que você possa descansar tranquilo.",
     },
     {
-      icon: Building2, 
-      title: "Acompanhamento Hospitalar", 
-      desc: "Seu familiar nunca ficará sozinho em internações. Oferecemos presença e suporte no hospital para que você possa descansar tranquilo.",
+      icon: Zap,
+      title: "Laserterapia",
+      desc: "Tecnologia avançada para acelerar a cicatrização de feridas e lesões. Ação anti-inflamatória e analgésica para uma recuperação mais rápida.",
     },
   ];
 
