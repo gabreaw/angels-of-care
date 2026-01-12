@@ -19,10 +19,8 @@ export default function ProviderPaciente() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("evolucao");
   const [uploading, setUploading] = useState(false);
-
   const [evolucoes, setEvolucoes] = useState([]);
   const [medicamentos, setMedicamentos] = useState([]);
-
   const [editingId, setEditingId] = useState(null); 
   const [formData, setFormData] = useState({
     turno: "Diurno",
