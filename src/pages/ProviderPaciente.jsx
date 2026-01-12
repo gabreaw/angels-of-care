@@ -47,7 +47,6 @@ export default function ProviderPaciente() {
 
       if (error) throw error;
       setPaciente(pac);
-
       fetchEvolucoes(); 
 
       const { data: meds } = await supabase
