@@ -184,7 +184,6 @@ export default function AdminPacientesDetalhes() {
       const nomeProfissional = funcionarioSelecionado
         ? funcionarioSelecionado.nome_completo
         : "Admin/Desconhecido";
-
       const fileInput = e.target.anexo;
       let newUrls = [];
 
