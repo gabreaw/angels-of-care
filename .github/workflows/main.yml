@@ -38,8 +38,8 @@ jobs:
             local-dir: ./dist/
             server-dir: ./
             
-            port: 21            
-            protocol: ftp      
-            security: loose    
-            timeout: 30000     
-            log-level: verbose 
+            port: 21
+            protocol: ftp
+            security: loose      
+            timeout: 120000
+            log-level: verbose
