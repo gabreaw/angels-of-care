@@ -1,12 +1,21 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { Link } from "react-router-dom";
-import { UserPlus, Search, MapPin, Phone, HeartPulse } from "lucide-react";
+import {
+  UserPlus,
+  Search,
+  MapPin,
+  Phone,
+  HeartPulse,
+  Archive,
+  UserCheck,
+} from "lucide-react";
 
 export default function AdminPacientes() {
   const [pacientes, setPacientes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [activeTab, setActiveTab] = useState("ativos"); // 'ativos' ou 'arquivados'
 
   useEffect(() => {
     fetchPacientes();
@@ -25,15 +34,23 @@ export default function AdminPacientes() {
     setLoading(false);
   }
 
-  const filtered = pacientes.filter(
-    (p) =>
+  // Lógica de Filtragem (Busca + Status)
+  const filtered = pacientes.filter((p) => {
+    const matchesSearch =
       p.nome_paciente.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (p.bairro && p.bairro.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+      (p.bairro && p.bairro.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const isArquivado = p.status === "arquivado";
+
+    if (activeTab === "ativos") return matchesSearch && !isArquivado;
+    if (activeTab === "arquivados") return matchesSearch && isArquivado;
+    return false;
+  });
 
   return (
     <div className="min-h-screen bg-paper p-4 md:p-8">
       <div className="max-w-6xl mx-auto">
+        {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
           <div>
             <h1 className="text-3xl font-serif text-primary font-bold">
@@ -51,6 +68,8 @@ export default function AdminPacientes() {
             Novo Paciente
           </Link>
         </div>
+
+        {/* BARRA DE BUSCA */}
         <div className="bg-white p-4 rounded-xl shadow-sm border border-beige mb-6 flex items-center gap-3">
           <Search className="text-sage" />
           <input
@@ -61,20 +80,54 @@ export default function AdminPacientes() {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
+
+        {/* ABAS DE NAVEGAÇÃO (Ativos vs Arquivados) */}
+        <div className="flex gap-4 mb-6 border-b border-beige pb-1">
+          <button
+            onClick={() => setActiveTab("ativos")}
+            className={`flex items-center gap-2 px-4 py-2 font-bold text-sm transition-all ${
+              activeTab === "ativos"
+                ? "text-primary border-b-2 border-primary"
+                : "text-gray-400 hover:text-gray-600"
+            }`}
+          >
+            <UserCheck size={18} /> Ativos (
+            {pacientes.filter((p) => p.status !== "arquivado").length})
+          </button>
+          <button
+            onClick={() => setActiveTab("arquivados")}
+            className={`flex items-center gap-2 px-4 py-2 font-bold text-sm transition-all ${
+              activeTab === "arquivados"
+                ? "text-gray-600 border-b-2 border-gray-600"
+                : "text-gray-400 hover:text-gray-600"
+            }`}
+          >
+            <Archive size={18} /> Arquivados (
+            {pacientes.filter((p) => p.status === "arquivado").length})
+          </button>
+        </div>
+
+        {/* LISTA DE CARDS */}
         {loading ? (
           <div className="text-center p-8 text-sage">
             Carregando pacientes...
           </div>
         ) : filtered.length === 0 ? (
-          <div className="text-center p-8 text-darkText/60 bg-white rounded-xl border border-dashed border-beige">
-            Nenhum paciente encontrado. Cadastre o primeiro!
+          <div className="text-center p-12 text-darkText/60 bg-white rounded-xl border border-dashed border-beige">
+            {activeTab === "ativos"
+              ? "Nenhum paciente ativo encontrado."
+              : "Nenhum paciente arquivado."}
           </div>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filtered.map((paciente) => (
               <div
                 key={paciente.id}
-                className="bg-white p-6 rounded-2xl shadow-md border border-beige hover:shadow-xl transition-all relative group"
+                className={`bg-white p-6 rounded-2xl shadow-md border transition-all relative group ${
+                  paciente.status === "arquivado"
+                    ? "border-gray-200 opacity-75 grayscale"
+                    : "border-beige hover:shadow-xl"
+                }`}
               >
                 <div className="flex justify-between items-start mb-4">
                   <div>
@@ -87,8 +140,21 @@ export default function AdminPacientes() {
                       </span>
                     )}
                   </div>
-                  <div className="bg-red-50 p-2 rounded-full">
-                    <HeartPulse className="text-red-400" size={20} />
+                  <div
+                    className={`${
+                      paciente.status === "arquivado"
+                        ? "bg-gray-100"
+                        : "bg-red-50"
+                    } p-2 rounded-full`}
+                  >
+                    <HeartPulse
+                      className={`${
+                        paciente.status === "arquivado"
+                          ? "text-gray-400"
+                          : "text-red-400"
+                      }`}
+                      size={20}
+                    />
                   </div>
                 </div>
 
@@ -111,6 +177,7 @@ export default function AdminPacientes() {
                     </div>
                   </div>
                 </div>
+
                 <div className="mt-6 pt-4 border-t border-dashed border-gray-100 flex justify-end">
                   <Link
                     to={`/admin/pacientes/${paciente.id}`}
@@ -119,6 +186,12 @@ export default function AdminPacientes() {
                     Ver Prontuário →
                   </Link>
                 </div>
+
+                {paciente.status === "arquivado" && (
+                  <div className="absolute top-2 right-2 bg-gray-200 text-gray-600 text-[9px] px-2 py-0.5 rounded font-bold uppercase">
+                    Arquivado
+                  </div>
+                )}
               </div>
             ))}
           </div>

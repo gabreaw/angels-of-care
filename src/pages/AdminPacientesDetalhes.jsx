@@ -22,6 +22,8 @@ import {
   Lock,
   CheckCircle,
   Save,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -59,8 +61,11 @@ export default function AdminPacientesDetalhes() {
     aspiracao: false,
     decubito: false,
     higiene: false,
-    arquivo_urls: [],
+    arquivo_url: null,
   });
+
+  const [expandedMonths, setExpandedMonths] = useState({});
+  const [expandedMonthsEscalas, setExpandedMonthsEscalas] = useState({});
 
   useEffect(() => {
     fetchTudo();
@@ -107,7 +112,7 @@ export default function AdminPacientesDetalhes() {
           .select("*")
           .eq("paciente_id", id)
           .order("data_registro", { ascending: false })
-          .limit(20), 
+          .limit(100),
         supabase
           .from("plantoes")
           .select("*, funcionarios(nome_completo)")
@@ -129,6 +134,50 @@ export default function AdminPacientesDetalhes() {
 
     setLoading(false);
   }
+
+  const evolucoesPorMes = evolucoes.reduce((acc, evo) => {
+    const date = new Date(evo.data_registro);
+    const monthKey = date.toLocaleString("pt-BR", {
+      month: "long",
+      year: "numeric",
+    });
+
+    const monthKeyCapitalized =
+      monthKey.charAt(0).toUpperCase() + monthKey.slice(1);
+
+    if (!acc[monthKeyCapitalized]) {
+      acc[monthKeyCapitalized] = [];
+    }
+    acc[monthKeyCapitalized].push(evo);
+    return acc;
+  }, {});
+
+  const plantoesPorMes = plantoes.reduce((acc, plantao) => {
+    const [ano, mes, dia] = plantao.data_plantao.split("-");
+    const date = new Date(ano, mes - 1, dia);
+
+    const monthKey = date.toLocaleString("pt-BR", {
+      month: "long",
+      year: "numeric",
+    });
+    const capitalized = monthKey.charAt(0).toUpperCase() + monthKey.slice(1);
+
+    if (!acc[capitalized]) acc[capitalized] = [];
+    acc[capitalized].push(plantao);
+    return acc;
+  }, {});
+  const toggleMonth = (monthKey) => {
+    setExpandedMonths((prev) => ({
+      ...prev,
+      [monthKey]: !prev[monthKey],
+    }));
+  };
+  const toggleMonthEscalas = (monthKey) => {
+    setExpandedMonthsEscalas((prev) => ({
+      ...prev,
+      [monthKey]: !prev[monthKey],
+    }));
+  };
 
   const handleEvolucaoChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -152,7 +201,7 @@ export default function AdminPacientesDetalhes() {
       aspiracao: item.aspiracao_tqt,
       decubito: item.mudanca_decubito,
       higiene: item.higiene_realizada,
-      arquivo_urls: item.arquivo_urls || (item.arquivo_url ? JSON.parse(item.arquivo_url) : []),
+      arquivo_url: item.arquivo_url,
     });
     setEditingEvolucaoId(item.id);
     window.scrollTo({ top: 200, behavior: "smooth" });
@@ -169,7 +218,7 @@ export default function AdminPacientesDetalhes() {
       aspiracao: false,
       decubito: false,
       higiene: false,
-      arquivo_urls: [],
+      arquivo_url: null,
     });
   };
 
@@ -184,30 +233,28 @@ export default function AdminPacientesDetalhes() {
       const nomeProfissional = funcionarioSelecionado
         ? funcionarioSelecionado.nome_completo
         : "Admin/Desconhecido";
+
       const fileInput = e.target.anexo;
-      let newUrls = [];
+      let finalUrl = evolucaoForm.arquivo_url;
 
-      if (fileInput && fileInput.files.length > 0) {
-        for (const file of fileInput.files) {
-          const fileExt = file.name.split(".").pop();
-          const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
-          const filePath = `${id}/${fileName}`;
+      if (fileInput && fileInput.files[0]) {
+        const file = fileInput.files[0];
+        const fileExt = file.name.split(".").pop();
+        const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
+        const filePath = `${id}/${fileName}`;
 
-          const { error: uploadError } = await supabase.storage
-            .from("evolucoes")
-            .upload(filePath, file);
+        const { error: uploadError } = await supabase.storage
+          .from("evolucoes")
+          .upload(filePath, file);
 
-          if (uploadError) throw uploadError;
+        if (uploadError) throw uploadError;
 
-          const { data: urlData } = supabase.storage
-            .from("evolucoes")
-            .getPublicUrl(filePath);
+        const { data: urlData } = supabase.storage
+          .from("evolucoes")
+          .getPublicUrl(filePath);
 
-          newUrls.push(urlData.publicUrl);
-        }
+        finalUrl = urlData.publicUrl;
       }
-
-      const finalUrls = [...evolucaoForm.arquivo_urls, ...newUrls];
 
       const payload = {
         paciente_id: id,
@@ -219,13 +266,12 @@ export default function AdminPacientesDetalhes() {
         aspiracao_tqt: evolucaoForm.aspiracao,
         mudanca_decubito: evolucaoForm.decubito,
         higiene_realizada: evolucaoForm.higiene,
-        arquivo_url: JSON.stringify(finalUrls),
+        arquivo_url: finalUrl,
       };
 
       let data, error;
 
       if (editingEvolucaoId) {
-        // UPDATE
         const res = await supabase
           .from("evolucoes")
           .update(payload)
@@ -762,11 +808,13 @@ export default function AdminPacientesDetalhes() {
                       multiple
                       className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 transition-colors cursor-pointer"
                     />
-                    {evolucaoForm.arquivo_urls && evolucaoForm.arquivo_urls.length > 0 && (
-                      <p className="text-xs text-green-600 mt-2">
-                        {evolucaoForm.arquivo_urls.length} arquivo(s) atual(is)
-                      </p>
-                    )}
+                    {evolucaoForm.arquivo_urls &&
+                      evolucaoForm.arquivo_urls.length > 0 && (
+                        <p className="text-xs text-green-600 mt-2">
+                          {evolucaoForm.arquivo_urls.length} arquivo(s)
+                          atual(is)
+                        </p>
+                      )}
                   </div>
 
                   <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
@@ -834,126 +882,160 @@ export default function AdminPacientesDetalhes() {
                 </span>
               </div>
 
-              {evolucoes.map((evo) => (
-                <div
-                  key={evo.id}
-                  className={`bg-white p-6 rounded-2xl shadow-sm border relative group hover:shadow-md transition-all ${
-                    editingEvolucaoId === evo.id
-                      ? "border-amber-400 ring-1 ring-amber-200"
-                      : "border-beige"
-                  }`}
-                >
-                  <div className="flex justify-between items-start mb-4 border-b border-gray-50 pb-3">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-sm ${
-                          evo.turno === "Noturno"
-                            ? "bg-indigo-500"
-                            : "bg-orange-400"
-                        }`}
-                      >
-                        {evo.turno === "Noturno" ? "N" : "D"}
-                      </div>
-                      <div>
-                        <span className="block text-sm font-bold text-darkText">
-                          {evo.profissional_nome}
+              {Object.keys(evolucoesPorMes).map((monthKey) => {
+                const isOpen = expandedMonths[monthKey];
+                return (
+                  <div
+                    key={monthKey}
+                    className="border border-beige rounded-xl overflow-hidden bg-white mb-4 shadow-sm"
+                  >
+                    <button
+                      onClick={() => toggleMonth(monthKey)}
+                      className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
+                    >
+                      <span className="font-bold text-primary text-sm flex items-center gap-2">
+                        <Calendar size={16} /> {monthKey}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold bg-white border border-gray-200 px-2 py-0.5 rounded text-gray-500">
+                          {evolucoesPorMes[monthKey].length}
                         </span>
-                        <span className="text-xs text-darkText/50 font-medium">
-                          {new Date(evo.data_registro).toLocaleString("pt-BR", {
-                            day: "2-digit",
-                            month: "long",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
+                        {isOpen ? (
+                          <ChevronDown size={18} className="text-gray-400" />
+                        ) : (
+                          <ChevronRight size={18} className="text-gray-400" />
+                        )}
                       </div>
-                    </div>
+                    </button>
 
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => iniciarEdicaoEvolucao(evo)}
-                        className="text-gray-300 hover:text-amber-500 hover:bg-amber-50 p-2 rounded-full transition-all"
-                        title="Editar registro"
-                      >
-                        <Edit size={18} />
-                      </button>
-                      <button
-                        onClick={() =>
-                          deletarItem(
-                            "evolucoes",
-                            evo.id,
-                            setEvolucoes,
-                            evolucoes
-                          )
-                        }
-                        className="text-gray-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-full transition-all"
-                        title="Excluir registro"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                  </div>
+                    {isOpen && (
+                      <div className="p-4 space-y-4 bg-gray-50/30">
+                        {evolucoesPorMes[monthKey].map((evo) => (
+                          <div
+                            key={evo.id}
+                            className={`bg-white p-5 rounded-xl border relative group hover:shadow-md transition-all ${
+                              editingEvolucaoId === evo.id
+                                ? "border-amber-400 ring-1 ring-amber-200"
+                                : "border-beige"
+                            }`}
+                          >
+                            <div className="flex justify-between items-start mb-3 border-b border-gray-50 pb-2">
+                              <div className="flex items-center gap-3">
+                                <div
+                                  className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm ${
+                                    evo.turno === "Noturno"
+                                      ? "bg-indigo-500"
+                                      : "bg-orange-400"
+                                  }`}
+                                >
+                                  {evo.turno === "Noturno" ? "N" : "D"}
+                                </div>
+                                <div>
+                                  <span className="block text-sm font-bold text-darkText">
+                                    {evo.profissional_nome}
+                                  </span>
+                                  <span className="text-[10px] text-gray-400 font-medium">
+                                    {new Date(evo.data_registro).toLocaleString(
+                                      "pt-BR",
+                                      {
+                                        day: "2-digit",
+                                        month: "2-digit",
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      }
+                                    )}
+                                  </span>
+                                </div>
+                              </div>
 
-                  <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 mb-4">
-                    <p className="text-darkText/80 text-sm whitespace-pre-wrap leading-relaxed font-sans">
-                      {evo.texto_evolucao}
-                    </p>
-                  </div>
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() => iniciarEdicaoEvolucao(evo)}
+                                  className="text-gray-300 hover:text-amber-500 hover:bg-amber-50 p-1.5 rounded-full transition-all"
+                                  title="Editar registro"
+                                >
+                                  <Edit size={16} />
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    deletarItem(
+                                      "evolucoes",
+                                      evo.id,
+                                      setEvolucoes,
+                                      evolucoes
+                                    )
+                                  }
+                                  className="text-gray-300 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-full transition-all"
+                                  title="Excluir registro"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </div>
 
-                  <div className="flex flex-col gap-3">
-                    {(() => {
-                      const urls = (() => {
-                        try {
-                          if (Array.isArray(evo.arquivo_urls)) return evo.arquivo_urls;
-                          if (typeof evo.arquivo_url === 'string') {
-                            if (evo.arquivo_url.startsWith('[')) {
-                              return JSON.parse(evo.arquivo_url);
-                            } else {
-                              return [evo.arquivo_url];
-                            }
-                          }
-                          return [];
-                        } catch (e) {
-                          console.error('Error parsing arquivo_url', e, evo.arquivo_url);
-                          return [];
-                        }
-                      })();
-                      return urls.map((url, index) => (
-                        <a
-                          key={index}
-                          href={url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-3 bg-blue-50 hover:bg-blue-100 text-blue-800 px-4 py-3 rounded-xl text-sm font-bold transition-colors border border-blue-100 w-full"
-                        >
-                          <div className="bg-white p-1 rounded-full">
-                            <Paperclip size={14} />
+                            <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 mb-3">
+                              <p className="text-darkText/80 text-sm whitespace-pre-wrap leading-relaxed font-sans">
+                                {evo.texto_evolucao}
+                              </p>
+                            </div>
+
+                            <div className="flex flex-col gap-2">
+                              {(() => {
+                                const urls = (() => {
+                                  try {
+                                    if (Array.isArray(evo.arquivo_urls))
+                                      return evo.arquivo_urls;
+                                    if (typeof evo.arquivo_url === "string") {
+                                      if (evo.arquivo_url.startsWith("[")) {
+                                        return JSON.parse(evo.arquivo_url);
+                                      } else {
+                                        return [evo.arquivo_url];
+                                      }
+                                    }
+                                    return [];
+                                  } catch (e) {
+                                    return [];
+                                  }
+                                })();
+                                return urls.map((url, index) => (
+                                  <a
+                                    key={index}
+                                    href={url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 text-blue-600 hover:underline text-xs font-bold"
+                                  >
+                                    <Paperclip size={12} /> Ver Anexo{" "}
+                                    {urls.length > 1 ? index + 1 : ""}
+                                  </a>
+                                ));
+                              })()}
+
+                              <div className="flex flex-wrap gap-2 mt-1">
+                                {evo.diurese_presente && (
+                                  <Tag label="Diurese" color="blue" />
+                                )}
+                                {evo.evacuacao_presente && (
+                                  <Tag label="Evacuação" color="brown" />
+                                )}
+                                {evo.aspiracao_tqt && (
+                                  <Tag label="Aspiração" color="red" />
+                                )}
+                                {evo.mudanca_decubito && (
+                                  <Tag label="Decúbito" color="green" />
+                                )}
+                                {evo.higiene_realizada && (
+                                  <Tag label="Higiene" color="teal" />
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          Visualizar Documento Anexado {urls.length > 1 ? `(${index + 1})` : ''}
-                        </a>
-                      ));
-                    })()}
-
-                    <div className="flex flex-wrap gap-2">
-                      {evo.diurese_presente && (
-                        <Tag label="Diurese" color="blue" />
-                      )}
-                      {evo.evacuacao_presente && (
-                        <Tag label="Evacuação" color="brown" />
-                      )}
-                      {evo.aspiracao_tqt && (
-                        <Tag label="Aspiração" color="red" />
-                      )}
-                      {evo.mudanca_decubito && (
-                        <Tag label="Decúbito" color="green" />
-                      )}
-                      {evo.higiene_realizada && (
-                        <Tag label="Higiene" color="teal" />
-                      )}
-                    </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -974,14 +1056,13 @@ export default function AdminPacientesDetalhes() {
                       required
                     >
                       <option value="">Selecione...</option>
-                      {listaFuncionarios.map((func) => (
-                        <option key={func.id} value={func.id}>
-                          {func.nome_completo}
+                      {listaFuncionarios.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.nome_completo}
                         </option>
                       ))}
                     </select>
                   </div>
-
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="label-mini">Data</label>
@@ -1001,7 +1082,6 @@ export default function AdminPacientesDetalhes() {
                       </select>
                     </div>
                   </div>
-
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="label-mini">Início</label>
@@ -1012,24 +1092,6 @@ export default function AdminPacientesDetalhes() {
                         required
                         defaultValue="07:00"
                       />
-                    </div>
-                    <div className="bg-purple-50 p-3 rounded-lg border border-purple-100 my-3">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          name="extra"
-                          className="w-5 h-5 accent-purple-600"
-                        />
-                        <div>
-                          <span className="font-bold text-purple-800 text-sm">
-                            Plantão Extra (Pagamento Diário)
-                          </span>
-                          <p className="text-[10px] text-purple-600 leading-tight">
-                            Marque se este plantão deve ser pago logo após
-                            realizado.
-                          </p>
-                        </div>
-                      </label>
                     </div>
                     <div>
                       <label className="label-mini">Fim</label>
@@ -1042,13 +1104,26 @@ export default function AdminPacientesDetalhes() {
                       />
                     </div>
                   </div>
-
+                  <div className="bg-purple-50 p-3 rounded-lg border border-purple-100 my-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        name="extra"
+                        className="w-5 h-5 accent-purple-600"
+                      />
+                      <span className="font-bold text-purple-800 text-sm">
+                        Plantão Extra
+                      </span>
+                    </label>
+                  </div>
                   <button className="w-full bg-primary hover:bg-[#3A4A3E] text-white font-bold py-3 rounded-xl transition-all shadow-md mt-2">
                     Confirmar Agenda
                   </button>
                 </form>
               </div>
             </div>
+
+            {/* Lista de Escalas com Acordeão */}
             <div className="lg:col-span-2 space-y-4">
               {plantoes.length === 0 && (
                 <div className="text-center p-8 text-darkText/50 bg-white rounded-2xl border border-dashed">
@@ -1056,81 +1131,131 @@ export default function AdminPacientesDetalhes() {
                 </div>
               )}
 
-              {plantoes.map((plantao) => {
-                const [pAno, pMes, pDia] = plantao.data_plantao.split("-");
-                const dataPlantaoObj = new Date(pAno, pMes - 1, pDia, 12, 0, 0);
+              {/* AQUI ESTÁ A CORREÇÃO: Iterar sobre os MÊSES, não direto nos plantões */}
+              {Object.keys(plantoesPorMes).map((monthKey) => {
+                const isOpen = expandedMonthsEscalas[monthKey];
+
                 return (
                   <div
-                    key={plantao.id}
-                    className="bg-white p-4 rounded-xl shadow-sm border border-beige flex justify-between items-center group"
+                    key={monthKey}
+                    className="border border-beige rounded-xl overflow-hidden bg-white mb-4 shadow-sm"
                   >
-                    <div className="flex items-center gap-4">
-                      <div className="bg-sage/10 text-primary p-3 rounded-lg text-center min-w-[60px]">
-                        <span className="block text-xs font-bold uppercase">
-                          {dataPlantaoObj
-                            .toLocaleDateString("pt-BR", { weekday: "short" })
-                            .replace(".", "")}
-                        </span>
-                        <span className="block text-xl font-bold">
-                          {dataPlantaoObj.getDate()}
-                        </span>
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-darkText">
-                          {plantao.funcionarios?.nome_completo ||
-                            "Sem funcionário"}
-                        </h4>
-                        <div className="flex items-center gap-3 text-xs text-darkText/60 mt-1">
-                          <span
-                            className={`px-2 py-0.5 rounded-full font-bold uppercase ${
-                              plantao.tipo_turno === "Noturno"
-                                ? "bg-indigo-100 text-indigo-700"
-                                : "bg-orange-100 text-orange-700"
-                            }`}
-                          >
-                            {plantao.tipo_turno}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Clock size={12} />{" "}
-                            {plantao.horario_inicio.slice(0, 5)} -{" "}
-                            {plantao.horario_fim.slice(0, 5)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`text-[10px] font-bold uppercase px-2 py-1 rounded border ${
-                          plantao.status === "agendado"
-                            ? "border-blue-200 text-blue-600 bg-blue-50"
-                            : plantao.status === "realizado"
-                            ? "border-green-200 text-green-600 bg-green-50"
-                            : "border-gray-200 text-gray-400"
-                        }`}
-                      >
-                        {plantao.status}
+                    <button
+                      onClick={() => toggleMonthEscalas(monthKey)}
+                      className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
+                    >
+                      <span className="font-bold text-primary text-sm flex items-center gap-2">
+                        <Calendar size={16} /> {monthKey}
                       </span>
-                      <button
-                        onClick={() =>
-                          deletarItem(
-                            "plantoes",
-                            plantao.id,
-                            setPlantoes,
-                            plantoes
-                          )
-                        }
-                        className="text-gray-300 hover:text-red-500 p-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold bg-white border border-gray-200 px-2 py-0.5 rounded text-gray-500">
+                          {plantoesPorMes[monthKey].length}
+                        </span>
+                        {isOpen ? (
+                          <ChevronDown size={18} className="text-gray-400" />
+                        ) : (
+                          <ChevronRight size={18} className="text-gray-400" />
+                        )}
+                      </div>
+                    </button>
+
+                    {isOpen && (
+                      <div className="p-4 space-y-3 bg-gray-50/30">
+                        {plantoesPorMes[monthKey].map((plantao) => {
+                          const [pAno, pMes, pDia] =
+                            plantao.data_plantao.split("-");
+                          const dataPlantaoObj = new Date(
+                            pAno,
+                            pMes - 1,
+                            pDia,
+                            12,
+                            0,
+                            0
+                          );
+
+                          return (
+                            <div
+                              key={plantao.id}
+                              className="bg-white p-4 rounded-xl shadow-sm border border-beige flex justify-between items-center group"
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className="bg-sage/10 text-primary p-3 rounded-lg text-center min-w-[60px]">
+                                  <span className="block text-xs font-bold uppercase">
+                                    {dataPlantaoObj
+                                      .toLocaleDateString("pt-BR", {
+                                        weekday: "short",
+                                      })
+                                      .replace(".", "")}
+                                  </span>
+                                  <span className="block text-xl font-bold">
+                                    {dataPlantaoObj.getDate()}
+                                  </span>
+                                </div>
+                                <div>
+                                  <h4 className="font-bold text-darkText">
+                                    {plantao.funcionarios?.nome_completo ||
+                                      "Sem funcionário"}
+                                  </h4>
+                                  <div className="flex items-center gap-3 text-xs text-darkText/60 mt-1">
+                                    <span
+                                      className={`px-2 py-0.5 rounded-full font-bold uppercase ${
+                                        plantao.tipo_turno === "Noturno"
+                                          ? "bg-indigo-100 text-indigo-700"
+                                          : "bg-orange-100 text-orange-700"
+                                      }`}
+                                    >
+                                      {plantao.tipo_turno}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <Clock size={12} />{" "}
+                                      {plantao.horario_inicio.slice(0, 5)} -{" "}
+                                      {plantao.horario_fim.slice(0, 5)}
+                                    </span>
+                                    {plantao.is_extra && (
+                                      <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-bold text-[10px] uppercase">
+                                        Extra
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`text-[10px] font-bold uppercase px-2 py-1 rounded border ${
+                                    plantao.status === "agendado"
+                                      ? "border-blue-200 text-blue-600 bg-blue-50"
+                                      : plantao.status === "realizado"
+                                      ? "border-green-200 text-green-600 bg-green-50"
+                                      : "border-gray-200 text-gray-400"
+                                  }`}
+                                >
+                                  {plantao.status}
+                                </span>
+                                <button
+                                  onClick={() =>
+                                    deletarItem(
+                                      "plantoes",
+                                      plantao.id,
+                                      setPlantoes,
+                                      plantoes
+                                    )
+                                  }
+                                  className="text-gray-300 hover:text-red-500 p-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
           </div>
         )}
-
         {activeTab === "sinais" && (
           <div className="bg-white rounded-2xl shadow border border-beige p-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
