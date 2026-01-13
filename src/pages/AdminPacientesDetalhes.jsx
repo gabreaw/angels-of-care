@@ -59,7 +59,7 @@ export default function AdminPacientesDetalhes() {
     aspiracao: false,
     decubito: false,
     higiene: false,
-    arquivo_url: null,
+    arquivo_urls: [],
   });
 
   useEffect(() => {
@@ -152,7 +152,7 @@ export default function AdminPacientesDetalhes() {
       aspiracao: item.aspiracao_tqt,
       decubito: item.mudanca_decubito,
       higiene: item.higiene_realizada,
-      arquivo_url: item.arquivo_url,
+      arquivo_urls: item.arquivo_urls || (item.arquivo_url ? JSON.parse(item.arquivo_url) : []),
     });
     setEditingEvolucaoId(item.id);
     window.scrollTo({ top: 200, behavior: "smooth" });
@@ -169,7 +169,7 @@ export default function AdminPacientesDetalhes() {
       aspiracao: false,
       decubito: false,
       higiene: false,
-      arquivo_url: null,
+      arquivo_urls: [],
     });
   };
 
@@ -186,26 +186,29 @@ export default function AdminPacientesDetalhes() {
         : "Admin/Desconhecido";
 
       const fileInput = e.target.anexo;
-      let finalUrl = evolucaoForm.arquivo_url;
+      let newUrls = [];
 
-      if (fileInput && fileInput.files[0]) {
-        const file = fileInput.files[0];
-        const fileExt = file.name.split(".").pop();
-        const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
-        const filePath = `${id}/${fileName}`;
+      if (fileInput && fileInput.files.length > 0) {
+        for (const file of fileInput.files) {
+          const fileExt = file.name.split(".").pop();
+          const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
+          const filePath = `${id}/${fileName}`;
 
-        const { error: uploadError } = await supabase.storage
-          .from("evolucoes")
-          .upload(filePath, file);
+          const { error: uploadError } = await supabase.storage
+            .from("evolucoes")
+            .upload(filePath, file);
 
-        if (uploadError) throw uploadError;
+          if (uploadError) throw uploadError;
 
-        const { data: urlData } = supabase.storage
-          .from("evolucoes")
-          .getPublicUrl(filePath);
+          const { data: urlData } = supabase.storage
+            .from("evolucoes")
+            .getPublicUrl(filePath);
 
-        finalUrl = urlData.publicUrl;
+          newUrls.push(urlData.publicUrl);
+        }
       }
+
+      const finalUrls = [...evolucaoForm.arquivo_urls, ...newUrls];
 
       const payload = {
         paciente_id: id,
@@ -217,7 +220,7 @@ export default function AdminPacientesDetalhes() {
         aspiracao_tqt: evolucaoForm.aspiracao,
         mudanca_decubito: evolucaoForm.decubito,
         higiene_realizada: evolucaoForm.higiene,
-        arquivo_url: finalUrl,
+        arquivo_url: JSON.stringify(finalUrls),
       };
 
       let data, error;
@@ -751,19 +754,18 @@ export default function AdminPacientesDetalhes() {
                   <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 border-dashed">
                     <label className="label-mini flex items-center gap-2 mb-2 text-blue-800 font-bold">
                       <Paperclip size={16} />
-                      {evolucaoForm.arquivo_url
-                        ? "Substituir Anexo Atual"
-                        : "Anexar Documento / Foto"}
+                      Anexar Documentos / Fotos (múltiplos)
                     </label>
                     <input
                       type="file"
                       name="anexo"
                       accept="image/*, application/pdf"
+                      multiple
                       className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 transition-colors cursor-pointer"
                     />
-                    {evolucaoForm.arquivo_url && (
-                      <p className="text-xs text-green-600 mt-2 truncate">
-                        Arquivo atual: ...{evolucaoForm.arquivo_url.slice(-15)}
+                    {evolucaoForm.arquivo_urls && evolucaoForm.arquivo_urls.length > 0 && (
+                      <p className="text-xs text-green-600 mt-2">
+                        {evolucaoForm.arquivo_urls.length} arquivo(s) atual(is)
                       </p>
                     )}
                   </div>
@@ -900,19 +902,38 @@ export default function AdminPacientesDetalhes() {
                   </div>
 
                   <div className="flex flex-col gap-3">
-                    {evo.arquivo_url && (
-                      <a
-                        href={evo.arquivo_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-3 bg-blue-50 hover:bg-blue-100 text-blue-800 px-4 py-3 rounded-xl text-sm font-bold transition-colors border border-blue-100 w-full"
-                      >
-                        <div className="bg-white p-1 rounded-full">
-                          <Paperclip size={14} />
-                        </div>
-                        Visualizar Documento Anexado
-                      </a>
-                    )}
+                    {(() => {
+                      const urls = (() => {
+                        try {
+                          if (Array.isArray(evo.arquivo_urls)) return evo.arquivo_urls;
+                          if (typeof evo.arquivo_url === 'string') {
+                            if (evo.arquivo_url.startsWith('[')) {
+                              return JSON.parse(evo.arquivo_url);
+                            } else {
+                              return [evo.arquivo_url];
+                            }
+                          }
+                          return [];
+                        } catch (e) {
+                          console.error('Error parsing arquivo_url', e, evo.arquivo_url);
+                          return [];
+                        }
+                      })();
+                      return urls.map((url, index) => (
+                        <a
+                          key={index}
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-3 bg-blue-50 hover:bg-blue-100 text-blue-800 px-4 py-3 rounded-xl text-sm font-bold transition-colors border border-blue-100 w-full"
+                        >
+                          <div className="bg-white p-1 rounded-full">
+                            <Paperclip size={14} />
+                          </div>
+                          Visualizar Documento Anexado {urls.length > 1 ? `(${index + 1})` : ''}
+                        </a>
+                      ));
+                    })()}
 
                     <div className="flex flex-wrap gap-2">
                       {evo.diurese_presente && (
