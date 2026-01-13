@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
-import { createClient } from "@supabase/supabase-js"; // IMPORTANTE: Para criar login sem deslogar
+import { createClient } from "@supabase/supabase-js";
 import {
   ArrowLeft,
   User,
@@ -19,12 +19,11 @@ import {
   Paperclip,
   Edit,
   X,
-  Lock, // Novo
-  CheckCircle, // Novo
-  AlertTriangle, // Novo
+  Lock,
+  CheckCircle,
+  Save,
 } from "lucide-react";
 
-// Configuração para cliente temporário (apenas para criar usuários)
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
@@ -35,16 +34,13 @@ export default function AdminPacientesDetalhes() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("geral");
 
-  // Edição de Dados Básicos
   const [editModalOpen, setEditModalOpen] = useState(false);
 
-  // Controle de Acesso Família (NOVO)
   const [modalAcessoOpen, setModalAcessoOpen] = useState(false);
   const [emailFamilia, setEmailFamilia] = useState("");
   const [novaSenha, setNovaSenha] = useState("");
   const [criandoAcesso, setCriandoAcesso] = useState(false);
 
-  // Listas de Dados
   const [historico, setHistorico] = useState([]);
   const [medicamentos, setMedicamentos] = useState([]);
   const [sinais, setSinais] = useState([]);
@@ -52,6 +48,19 @@ export default function AdminPacientesDetalhes() {
   const [plantoes, setPlantoes] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [listaFuncionarios, setListaFuncionarios] = useState([]);
+
+  const [editingEvolucaoId, setEditingEvolucaoId] = useState(null);
+  const [evolucaoForm, setEvolucaoForm] = useState({
+    funcionario_id: "",
+    turno: "Diurno",
+    texto: "",
+    diurese: false,
+    evacuacao: false,
+    aspiracao: false,
+    decubito: false,
+    higiene: false,
+    arquivo_url: null,
+  });
 
   useEffect(() => {
     fetchTudo();
@@ -71,7 +80,6 @@ export default function AdminPacientesDetalhes() {
       return;
     }
     setPaciente(pac);
-    // Preenche o email da família se já existir
     if (pac.email_responsavel) {
       setEmailFamilia(pac.email_responsavel);
     }
@@ -99,7 +107,7 @@ export default function AdminPacientesDetalhes() {
           .select("*")
           .eq("paciente_id", id)
           .order("data_registro", { ascending: false })
-          .limit(10),
+          .limit(20), 
         supabase
           .from("plantoes")
           .select("*, funcionarios(nome_completo)")
@@ -122,7 +130,137 @@ export default function AdminPacientesDetalhes() {
     setLoading(false);
   }
 
-  // --- NOVA FUNÇÃO: CRIAR ACESSO FAMÍLIA ---
+  const handleEvolucaoChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setEvolucaoForm((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+  };
+
+  const iniciarEdicaoEvolucao = (item) => {
+    const funcEncontrado = listaFuncionarios.find(
+      (f) => f.nome_completo === item.profissional_nome
+    );
+
+    setEvolucaoForm({
+      funcionario_id: funcEncontrado ? funcEncontrado.id : "",
+      turno: item.turno,
+      texto: item.texto_evolucao,
+      diurese: item.diurese_presente,
+      evacuacao: item.evacuacao_presente,
+      aspiracao: item.aspiracao_tqt,
+      decubito: item.mudanca_decubito,
+      higiene: item.higiene_realizada,
+      arquivo_url: item.arquivo_url,
+    });
+    setEditingEvolucaoId(item.id);
+    window.scrollTo({ top: 200, behavior: "smooth" });
+  };
+
+  const cancelarEdicaoEvolucao = () => {
+    setEditingEvolucaoId(null);
+    setEvolucaoForm({
+      funcionario_id: "",
+      turno: "Diurno",
+      texto: "",
+      diurese: false,
+      evacuacao: false,
+      aspiracao: false,
+      decubito: false,
+      higiene: false,
+      arquivo_url: null,
+    });
+  };
+
+  const handleSalvarEvolucao = async (e) => {
+    e.preventDefault();
+    setUploading(true);
+
+    try {
+      const funcionarioSelecionado = listaFuncionarios.find(
+        (f) => f.id == evolucaoForm.funcionario_id
+      );
+      const nomeProfissional = funcionarioSelecionado
+        ? funcionarioSelecionado.nome_completo
+        : "Admin/Desconhecido";
+
+      const fileInput = e.target.anexo;
+      let finalUrl = evolucaoForm.arquivo_url;
+
+      if (fileInput && fileInput.files[0]) {
+        const file = fileInput.files[0];
+        const fileExt = file.name.split(".").pop();
+        const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
+        const filePath = `${id}/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("evolucoes")
+          .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage
+          .from("evolucoes")
+          .getPublicUrl(filePath);
+
+        finalUrl = urlData.publicUrl;
+      }
+
+      const payload = {
+        paciente_id: id,
+        profissional_nome: nomeProfissional,
+        turno: evolucaoForm.turno,
+        texto_evolucao: evolucaoForm.texto,
+        diurese_presente: evolucaoForm.diurese,
+        evacuacao_presente: evolucaoForm.evacuacao,
+        aspiracao_tqt: evolucaoForm.aspiracao,
+        mudanca_decubito: evolucaoForm.decubito,
+        higiene_realizada: evolucaoForm.higiene,
+        arquivo_url: finalUrl,
+      };
+
+      let data, error;
+
+      if (editingEvolucaoId) {
+        // UPDATE
+        const res = await supabase
+          .from("evolucoes")
+          .update(payload)
+          .eq("id", editingEvolucaoId)
+          .select();
+        data = res.data;
+        error = res.error;
+      } else {
+        const res = await supabase.from("evolucoes").insert([payload]).select();
+        data = res.data;
+        error = res.error;
+      }
+
+      if (error) {
+        alert("Erro: " + error.message);
+      } else if (data) {
+        if (editingEvolucaoId) {
+          setEvolucoes(
+            evolucoes.map((evo) =>
+              evo.id === editingEvolucaoId ? data[0] : evo
+            )
+          );
+          alert("Evolução atualizada!");
+        } else {
+          setEvolucoes([data[0], ...evolucoes]);
+          alert("Evolução criada!");
+        }
+        cancelarEdicaoEvolucao();
+        e.target.reset();
+      }
+    } catch (err) {
+      alert("Erro no processo: " + err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleCriarAcesso = async (e) => {
     e.preventDefault();
     if (novaSenha.length < 6) {
@@ -132,10 +270,8 @@ export default function AdminPacientesDetalhes() {
     setCriandoAcesso(true);
 
     try {
-      // 1. Cria cliente temporário
       const tempSupabase = createClient(supabaseUrl, supabaseKey);
 
-      // 2. Cria usuário no Auth
       const { data: authData, error: authError } =
         await tempSupabase.auth.signUp({
           email: emailFamilia,
@@ -150,10 +286,6 @@ export default function AdminPacientesDetalhes() {
         }
       }
 
-      // Se criou ou já existia, tentamos vincular.
-      // Nota: authData.user pode ser null se o usuário já existia (segurança do Supabase).
-      // Nesse caso, o vínculo exato precisaria do ID, mas se acabou de criar, temos o ID.
-
       let userUuid = authData.user?.id;
 
       if (!userUuid && authError?.message.includes("already registered")) {
@@ -163,7 +295,6 @@ export default function AdminPacientesDetalhes() {
       }
 
       if (userUuid) {
-        // 3. Atualiza tabela pacientes
         const { error: updateError } = await supabase
           .from("pacientes")
           .update({
@@ -280,71 +411,6 @@ export default function AdminPacientesDetalhes() {
       setSinais([data[0], ...sinais]);
       form.reset();
     }
-  };
-
-  const addEvolucao = async (e) => {
-    e.preventDefault();
-    setUploading(true);
-    const form = e.target;
-
-    const funcId = form.funcionario_id.value;
-    const funcionarioSelecionado = listaFuncionarios.find(
-      (f) => f.id == funcId
-    );
-    const nomeProfissional = funcionarioSelecionado
-      ? funcionarioSelecionado.nome_completo
-      : "Desconhecido";
-
-    const file = form.anexo.files[0];
-    let arquivoUrl = null;
-
-    if (file) {
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
-      const filePath = `${id}/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from("evolucoes")
-        .upload(filePath, file);
-
-      if (uploadError) {
-        alert("Erro ao enviar imagem: " + uploadError.message);
-        setUploading(false);
-        return;
-      }
-
-      const { data: urlData } = supabase.storage
-        .from("evolucoes")
-        .getPublicUrl(filePath);
-
-      arquivoUrl = urlData.publicUrl;
-    }
-
-    const novo = {
-      paciente_id: id,
-      profissional_nome: nomeProfissional,
-      turno: form.turno.value,
-      texto_evolucao: form.texto.value,
-      diurese_presente: form.diurese.checked,
-      evacuacao_presente: form.evacuacao.checked,
-      aspiracao_tqt: form.aspiracao.checked,
-      mudanca_decubito: form.decubito.checked,
-      higiene_realizada: form.higiene.checked,
-      arquivo_url: arquivoUrl,
-    };
-
-    const { data, error } = await supabase
-      .from("evolucoes")
-      .insert([novo])
-      .select();
-
-    if (error) {
-      alert("Erro ao salvar evolução: " + error.message);
-    } else if (data) {
-      setEvolucoes([data[0], ...evolucoes]);
-      form.reset();
-    }
-    setUploading(false);
   };
 
   const addPlantao = async (e) => {
@@ -598,20 +664,50 @@ export default function AdminPacientesDetalhes() {
           </div>
         )}
 
-        {/* --- ABAS RESTANTES (MANTIDAS IGUAIS) --- */}
         {activeTab === "evolucao" && (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
             <div className="xl:col-span-1">
-              <div className="bg-white rounded-2xl shadow border border-beige p-6 sticky top-6">
-                <h3 className="text-lg font-bold text-primary mb-6 flex items-center gap-2 border-b border-beige pb-4">
-                  <FileText size={20} /> Nova Evolução
-                </h3>
-                <form onSubmit={addEvolucao} className="space-y-5">
+              <div
+                className={`bg-white rounded-2xl shadow border border-beige p-6 sticky top-6 ${
+                  editingEvolucaoId
+                    ? "border-amber-400 ring-1 ring-amber-200"
+                    : ""
+                }`}
+              >
+                <div className="flex justify-between items-center mb-6 border-b border-beige pb-4">
+                  <h3
+                    className={`text-lg font-bold flex items-center gap-2 ${
+                      editingEvolucaoId ? "text-amber-700" : "text-primary"
+                    }`}
+                  >
+                    {editingEvolucaoId ? (
+                      <>
+                        <Edit size={20} /> Editando Evolução
+                      </>
+                    ) : (
+                      <>
+                        <FileText size={20} /> Nova Evolução
+                      </>
+                    )}
+                  </h3>
+                  {editingEvolucaoId && (
+                    <button
+                      onClick={cancelarEdicaoEvolucao}
+                      className="text-xs flex items-center gap-1 bg-white border border-gray-300 px-3 py-1 rounded-lg hover:bg-gray-50 text-gray-600"
+                    >
+                      <X size={14} /> Cancelar
+                    </button>
+                  )}
+                </div>
+
+                <form onSubmit={handleSalvarEvolucao} className="space-y-5">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="label-mini mb-1">Profissional</label>
                       <select
                         name="funcionario_id"
+                        value={evolucaoForm.funcionario_id}
+                        onChange={handleEvolucaoChange}
                         className="input-mini bg-white w-full h-10"
                         required
                       >
@@ -628,6 +724,8 @@ export default function AdminPacientesDetalhes() {
                       <label className="label-mini mb-1">Turno</label>
                       <select
                         name="turno"
+                        value={evolucaoForm.turno}
+                        onChange={handleEvolucaoChange}
                         className="input-mini bg-white w-full h-10"
                       >
                         <option>Diurno</option>
@@ -642,6 +740,8 @@ export default function AdminPacientesDetalhes() {
                     </label>
                     <textarea
                       name="texto"
+                      value={evolucaoForm.texto}
+                      onChange={handleEvolucaoChange}
                       placeholder="Descreva o plantão, intercorrências e observações..."
                       className="w-full p-4 rounded-xl border border-gray-300 text-sm h-96 focus:border-primary focus:ring-1 focus:ring-primary outline-none resize-none leading-relaxed shadow-inner"
                       required
@@ -650,7 +750,10 @@ export default function AdminPacientesDetalhes() {
 
                   <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 border-dashed">
                     <label className="label-mini flex items-center gap-2 mb-2 text-blue-800 font-bold">
-                      <Paperclip size={16} /> Anexar Documento / Foto
+                      <Paperclip size={16} />
+                      {evolucaoForm.arquivo_url
+                        ? "Substituir Anexo Atual"
+                        : "Anexar Documento / Foto"}
                     </label>
                     <input
                       type="file"
@@ -658,6 +761,11 @@ export default function AdminPacientesDetalhes() {
                       accept="image/*, application/pdf"
                       className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 transition-colors cursor-pointer"
                     />
+                    {evolucaoForm.arquivo_url && (
+                      <p className="text-xs text-green-600 mt-2 truncate">
+                        Arquivo atual: ...{evolucaoForm.arquivo_url.slice(-15)}
+                      </p>
+                    )}
                   </div>
 
                   <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
@@ -679,6 +787,8 @@ export default function AdminPacientesDetalhes() {
                           <input
                             type="checkbox"
                             name={proc.name}
+                            checked={evolucaoForm[proc.name]}
+                            onChange={handleEvolucaoChange}
                             className="w-4 h-4 accent-primary rounded cursor-pointer"
                           />
                           <span className="text-sm text-darkText font-medium">
@@ -691,10 +801,18 @@ export default function AdminPacientesDetalhes() {
 
                   <button
                     disabled={uploading}
-                    className="w-full bg-primary hover:bg-[#3A4A3E] text-white font-bold py-4 rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex justify-center items-center gap-2 text-base"
+                    className={`w-full text-white font-bold py-4 rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex justify-center items-center gap-2 text-base ${
+                      editingEvolucaoId
+                        ? "bg-amber-600 hover:bg-amber-700"
+                        : "bg-primary hover:bg-[#3A4A3E]"
+                    }`}
                   >
                     {uploading ? (
-                      <span className="animate-pulse">Enviando...</span>
+                      <span className="animate-pulse">Processando...</span>
+                    ) : editingEvolucaoId ? (
+                      <>
+                        <Save size={20} /> Atualizar Evolução
+                      </>
                     ) : (
                       <>
                         <Plus size={20} /> Salvar Evolução no Prontuário
@@ -718,7 +836,11 @@ export default function AdminPacientesDetalhes() {
               {evolucoes.map((evo) => (
                 <div
                   key={evo.id}
-                  className="bg-white p-6 rounded-2xl shadow-sm border border-beige relative group hover:shadow-md transition-shadow"
+                  className={`bg-white p-6 rounded-2xl shadow-sm border relative group hover:shadow-md transition-all ${
+                    editingEvolucaoId === evo.id
+                      ? "border-amber-400 ring-1 ring-amber-200"
+                      : "border-beige"
+                  }`}
                 >
                   <div className="flex justify-between items-start mb-4 border-b border-gray-50 pb-3">
                     <div className="flex items-center gap-3">
@@ -746,20 +868,29 @@ export default function AdminPacientesDetalhes() {
                       </div>
                     </div>
 
-                    <button
-                      onClick={() =>
-                        deletarItem(
-                          "evolucoes",
-                          evo.id,
-                          setEvolucoes,
-                          evolucoes
-                        )
-                      }
-                      className="text-gray-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-full transition-all"
-                      title="Excluir registro"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => iniciarEdicaoEvolucao(evo)}
+                        className="text-gray-300 hover:text-amber-500 hover:bg-amber-50 p-2 rounded-full transition-all"
+                        title="Editar registro"
+                      >
+                        <Edit size={18} />
+                      </button>
+                      <button
+                        onClick={() =>
+                          deletarItem(
+                            "evolucoes",
+                            evo.id,
+                            setEvolucoes,
+                            evolucoes
+                          )
+                        }
+                        className="text-gray-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-full transition-all"
+                        title="Excluir registro"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 mb-4">
@@ -806,6 +937,7 @@ export default function AdminPacientesDetalhes() {
             </div>
           </div>
         )}
+
         {activeTab === "escalas" && (
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-1">
@@ -978,6 +1110,7 @@ export default function AdminPacientesDetalhes() {
             </div>
           </div>
         )}
+
         {activeTab === "sinais" && (
           <div className="bg-white rounded-2xl shadow border border-beige p-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
@@ -1087,6 +1220,7 @@ export default function AdminPacientesDetalhes() {
             </div>
           </div>
         )}
+
         {activeTab === "prontuario" && (
           <div className="grid lg:grid-cols-2 gap-6">
             <div className="bg-white rounded-2xl shadow border border-beige p-6">
@@ -1365,7 +1499,6 @@ export default function AdminPacientesDetalhes() {
         </div>
       )}
 
-      {/* --- MODAL DE CRIAR ACESSO (FAMÍLIA) --- */}
       {modalAcessoOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 border border-amber-100">

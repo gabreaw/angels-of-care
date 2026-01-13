@@ -7,8 +7,8 @@ import {
   Pill,
   MapPin,
   Paperclip,
-  Edit, 
-  X, 
+  Edit,
+  X,
   Save,
 } from "lucide-react";
 
@@ -21,7 +21,7 @@ export default function ProviderPaciente() {
   const [uploading, setUploading] = useState(false);
   const [evolucoes, setEvolucoes] = useState([]);
   const [medicamentos, setMedicamentos] = useState([]);
-  const [editingId, setEditingId] = useState(null); 
+  const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
     turno: "Diurno",
     texto: "",
@@ -47,7 +47,7 @@ export default function ProviderPaciente() {
 
       if (error) throw error;
       setPaciente(pac);
-      fetchEvolucoes(); 
+      fetchEvolucoes();
 
       const { data: meds } = await supabase
         .from("medicamentos")
@@ -68,7 +68,7 @@ export default function ProviderPaciente() {
       .select("*")
       .eq("paciente_id", id)
       .order("created_at", { ascending: false })
-      .limit(10); 
+      .limit(10);
     setEvolucoes(evos || []);
   }
 
@@ -130,7 +130,7 @@ export default function ProviderPaciente() {
       }
 
       const fileInput = e.target.anexo;
-      let finalUrl = formData.arquivo_url; 
+      let finalUrl = formData.arquivo_url;
 
       if (fileInput && fileInput.files[0]) {
         const file = fileInput.files[0];
@@ -152,7 +152,7 @@ export default function ProviderPaciente() {
 
       const payload = {
         paciente_id: id,
-        profissional_nome: nomePrestador, 
+        profissional_nome: nomePrestador,
         turno: formData.turno,
         texto_evolucao: formData.texto,
         diurese_presente: formData.diurese,
@@ -389,7 +389,6 @@ export default function ProviderPaciente() {
                 </button>
               </form>
             </div>
-
             <div className="space-y-3 pb-10">
               <h4 className="text-xs font-bold text-gray-400 uppercase ml-1">
                 Últimos Registros
@@ -432,11 +431,9 @@ export default function ProviderPaciente() {
                       <Edit size={16} />
                     </button>
                   </div>
-
                   <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
                     {evo.texto_evolucao}
                   </p>
-
                   <div className="flex flex-wrap gap-1 mt-3 opacity-80">
                     {evo.diurese_presente && (
                       <span className="text-[9px] border px-1 rounded bg-gray-50">
@@ -469,7 +466,6 @@ export default function ProviderPaciente() {
             </div>
           </>
         )}
-
         {activeTab === "info" && (
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-6">
             <div>
@@ -517,7 +513,6 @@ export default function ProviderPaciente() {
             </div>
           </div>
         )}
-
         {activeTab === "meds" && (
           <div className="space-y-3">
             {medicamentos.length === 0 && (
@@ -548,6 +543,7 @@ export default function ProviderPaciente() {
             ))}
           </div>
         )}
+        {activeTab === "meds" && <div className="space-y-3"></div>}
       </div>
     </div>
   );
