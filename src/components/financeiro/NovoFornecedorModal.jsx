@@ -85,7 +85,7 @@ export default function NovoFornecedorModal({ onClose, onSuccess }) {
   };
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white w-full max-w-4xl rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
+      <div className="bg-white w-full max-w-6xl rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
         <div className="flex justify-between items-center p-6 border-b border-gray-100">
           <h2 className="text-xl font-bold text-gray-800">Novo Cadastro</h2>
           <button onClick={onClose}>
@@ -202,8 +202,6 @@ export default function NovoFornecedorModal({ onClose, onSuccess }) {
                 </div>
               </div>
             </div>
-
-            {/* Endereço */}
             <div className="bg-white p-6 rounded-xl border border-gray-200">
               <h3 className="font-bold text-gray-700 mb-4">Endereço</h3>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
