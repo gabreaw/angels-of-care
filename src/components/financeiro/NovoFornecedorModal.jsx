@@ -1,0 +1,303 @@
+import React, { useState } from "react";
+import { supabase } from "../../lib/supabase";
+import { X, Save } from "lucide-react";
+
+export default function NovoFornecedorModal({ onClose, onSuccess }) {
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    tipo_pessoa: "juridica",
+    cpf_cnpj: "",
+    nome: "",
+    nome_fantasia: "",
+    tipo_relacao: "fornecedor",
+    email: "",
+    telefone_celular: "",
+    cep: "",
+    endereco: "",
+    numero: "",
+    bairro: "",
+    cidade: "",
+    estado: "",
+    observacoes: "",
+  });
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? (checked ? "fornecedor" : "") : value,
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from("financeiro_entidades")
+        .insert([formData]);
+      if (error) throw error;
+      alert("Cadastro realizado com sucesso!");
+      onSuccess();
+      onClose();
+    } catch (error) {
+      alert("Erro ao cadastrar: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  const handleBuscarCNPJ = async () => {
+    const cnpjLimpo = formData.cpf_cnpj.replace(/\D/g, "");
+
+    if (cnpjLimpo.length !== 14) {
+      alert("Por favor, digite um CNPJ válido com 14 dígitos.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`
+      );
+
+      if (!response.ok) throw new Error("CNPJ não encontrado ou erro na API.");
+
+      const data = await response.json();
+
+      setFormData((prev) => ({
+        ...prev,
+        nome: data.razao_social,
+        nome_fantasia: data.nome_fantasia || data.razao_social,
+        cep: data.cep,
+        endereco: data.logradouro,
+        numero: data.numero,
+        bairro: data.bairro,
+        cidade: data.municipio,
+        estado: data.uf,
+        email: data.email || "",
+        telefone_celular: data.ddd_telefone_1 || "",
+      }));
+    } catch (error) {
+      alert("Erro ao buscar CNPJ: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white w-full max-w-4xl rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
+        <div className="flex justify-between items-center p-6 border-b border-gray-100">
+          <h2 className="text-xl font-bold text-gray-800">Novo Cadastro</h2>
+          <button onClick={onClose}>
+            <X size={24} className="text-gray-400 hover:text-red-500" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+          <form
+            id="form-entidade"
+            onSubmit={handleSubmit}
+            className="space-y-6"
+          >
+            <div className="bg-white p-6 rounded-xl border border-gray-200">
+              <h3 className="font-bold text-gray-700 mb-4">Dados Gerais</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-gray-500">
+                    Tipo de Pessoa *
+                  </label>
+                  <select
+                    name="tipo_pessoa"
+                    value={formData.tipo_pessoa}
+                    onChange={handleChange}
+                    className="w-full p-2 border rounded"
+                  >
+                    <option value="juridica">Jurídica</option>
+                    <option value="fisica">Física</option>
+                    <option value="estrangeira">Estrangeira</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500">
+                    CPF/CNPJ
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      name="cpf_cnpj"
+                      value={formData.cpf_cnpj}
+                      onChange={handleChange}
+                      className="w-full p-2 border rounded"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleBuscarCNPJ}
+                      className="px-3 bg-blue-50 text-blue-600 text-xs font-bold rounded border border-blue-200 hover:bg-blue-100"
+                    >
+                      Buscar
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500">
+                    Nome Fantasia *
+                  </label>
+                  <input
+                    name="nome_fantasia"
+                    value={formData.nome_fantasia}
+                    onChange={handleChange}
+                    className="w-full p-2 border rounded"
+                    required
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-xs font-bold text-gray-500">
+                    Razão Social / Nome *
+                  </label>
+                  <input
+                    name="nome"
+                    value={formData.nome}
+                    onChange={handleChange}
+                    className="w-full p-2 border rounded"
+                    required
+                  />
+                </div>
+                <div className="flex items-center pt-5 gap-4">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={true} readOnly /> Fornecedor
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" /> Transportadora
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl border border-gray-200">
+              <h3 className="font-bold text-gray-700 mb-4">
+                Informações Adicionais
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="md:col-span-1">
+                  <label className="text-xs font-bold text-gray-500">
+                    E-mail
+                  </label>
+                  <input
+                    name="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    className="w-full p-2 border rounded"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500">
+                    Celular
+                  </label>
+                  <input
+                    name="telefone_celular"
+                    value={formData.telefone_celular}
+                    onChange={handleChange}
+                    className="w-full p-2 border rounded"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Endereço */}
+            <div className="bg-white p-6 rounded-xl border border-gray-200">
+              <h3 className="font-bold text-gray-700 mb-4">Endereço</h3>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-gray-500">CEP</label>
+                  <input
+                    name="cep"
+                    value={formData.cep}
+                    onChange={handleChange}
+                    className="w-full p-2 border rounded"
+                  />
+                </div>
+                <div className="md:col-span-3">
+                  <label className="text-xs font-bold text-gray-500">
+                    Logradouro
+                  </label>
+                  <input
+                    name="endereco"
+                    value={formData.endereco}
+                    onChange={handleChange}
+                    className="w-full p-2 border rounded"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500">
+                    Número
+                  </label>
+                  <input
+                    name="numero"
+                    value={formData.numero}
+                    onChange={handleChange}
+                    className="w-full p-2 border rounded"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500">
+                    Bairro
+                  </label>
+                  <input
+                    name="bairro"
+                    value={formData.bairro}
+                    onChange={handleChange}
+                    className="w-full p-2 border rounded"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500">
+                    Cidade
+                  </label>
+                  <input
+                    name="cidade"
+                    value={formData.cidade}
+                    onChange={handleChange}
+                    className="w-full p-2 border rounded"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500">
+                    Estado
+                  </label>
+                  <input
+                    name="estado"
+                    value={formData.estado}
+                    onChange={handleChange}
+                    className="w-full p-2 border rounded"
+                  />
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div className="p-4 border-t border-gray-100 flex justify-end gap-3 bg-white rounded-b-xl">
+          <button
+            onClick={onClose}
+            className="px-6 py-2 border rounded text-gray-600"
+          >
+            Cancelar
+          </button>
+          <button
+            form="form-entidade"
+            disabled={loading}
+            className="px-6 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700 flex items-center gap-2"
+          >
+            {loading ? (
+              "Salvando..."
+            ) : (
+              <>
+                <Save size={18} /> Salvar
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -8,6 +8,7 @@ import {
   LogOut,
   Calendar,
   Inbox,
+  Landmark,
 } from "lucide-react";
 
 export default function Dashboard() {
@@ -130,6 +131,19 @@ export default function Dashboard() {
           <p className="text-darkText/70">
             Currículos recebidos pelo site (Trabalhe Conosco).
           </p>
+        </Link>
+
+        <Link
+          to="/admin/financeiro"
+          className="bg-white p-8 rounded-2xl shadow-md border-2 border-green-200 hover:border-green-400 hover:shadow-xl hover:-translate-y-1 transition-all group relative overflow-hidden"
+        >
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-6 group-hover:bg-blue-100 transition-colors">
+            <Landmark className="w-8 h-8 text-green-700" />
+          </div>
+          <h2 className="text-2xl font-serif text-primary font-bold mb-2">
+            Financeiro
+          </h2>
+          <p className="text-darkText/70">Área financeira</p>
         </Link>
       </div>
     </div>

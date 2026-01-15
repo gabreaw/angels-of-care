@@ -24,6 +24,7 @@ import ProviderPaciente from "./pages/ProviderPaciente";
 import ClientHome from "./pages/ClientHome";
 import TrabalheConosco from "./pages/TrabalheConosco";
 import AdminCandidatos from "./pages/AdminCandidatos";
+import AdminFinanceiro from "./pages/AdminFinanceiro";
 
 export default function App() {
   return (
@@ -65,6 +66,10 @@ export default function App() {
             <Route
               path="/admin/escalas/confirmacao"
               element={<AdminConfirmacaoEscala />}
+            />
+            <Route
+              path="/admin/financeiro"
+              element={<AdminFinanceiro />}
             />
           </Route>
           <Route element={<ProtectedRoute restrictTo="prestador" />}>
