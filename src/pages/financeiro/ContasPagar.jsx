@@ -14,16 +14,20 @@ import {
   XCircle,
   ChevronDown,
   ChevronUp,
-  Info,
+  X,
 } from "lucide-react";
 
 export default function ContasPagar() {
   const [transacoes, setTransacoes] = useState([]);
+  const [filteredTransacoes, setFilteredTransacoes] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Filter States
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterMonth, setFilterMonth] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [itemParaEditar, setItemParaEditar] = useState(null);
-
   const [expandedRows, setExpandedRows] = useState({});
 
   const [resumo, setResumo] = useState({
@@ -38,6 +42,10 @@ export default function ContasPagar() {
     fetchTransacoes();
   }, []);
 
+  useEffect(() => {
+    applyFilters();
+  }, [transacoes, searchTerm, filterMonth]);
+
   async function fetchTransacoes() {
     setLoading(true);
     const { data, error } = await supabase
@@ -49,9 +57,37 @@ export default function ContasPagar() {
     if (error) console.error(error);
     else {
       setTransacoes(data || []);
-      calcularResumo(data || []);
     }
     setLoading(false);
+  }
+
+  function applyFilters() {
+    let result = transacoes;
+
+    if (searchTerm) {
+      const lowerTerm = searchTerm.toLowerCase();
+      result = result.filter(
+        (item) =>
+          item.descricao?.toLowerCase().includes(lowerTerm) ||
+          item.financeiro_entidades?.nome?.toLowerCase().includes(lowerTerm) ||
+          item.financeiro_categorias?.nome?.toLowerCase().includes(lowerTerm)
+      );
+    }
+
+    if (filterMonth) {
+      const today = new Date();
+      const currentMonth = today.getMonth();
+      const currentYear = today.getFullYear();
+
+      result = result.filter((item) => {
+        if (!item.data_vencimento) return false;
+        const [year, month, day] = item.data_vencimento.split("-").map(Number);
+        return month - 1 === currentMonth && year === currentYear;
+      });
+    }
+
+    setFilteredTransacoes(result);
+    calcularResumo(result);
   }
 
   function calcularResumo(dados) {
@@ -75,6 +111,43 @@ export default function ContasPagar() {
     });
     setResumo({ vencidos: v, hoje: h, aVencer: av, pago: p, total: t });
   }
+
+  // --- NOVA FUNÇÃO: AGRUPAR POR MÊS ---
+  function groupTransactionsByMonth(transactions) {
+    const groups = {};
+
+    transactions.forEach((item) => {
+      if (!item.data_vencimento) return;
+      // Pega "2023-10" do "2023-10-25"
+      const monthKey = item.data_vencimento.slice(0, 7);
+
+      if (!groups[monthKey]) {
+        groups[monthKey] = {
+          items: [],
+          total: 0,
+        };
+      }
+      groups[monthKey].items.push(item);
+      groups[monthKey].total += Number(item.valor);
+    });
+
+    // Retorna ordenado pela chave (data)
+    return Object.keys(groups)
+      .sort()
+      .map((key) => ({
+        key,
+        ...groups[key],
+      }));
+  }
+
+  // Helper para formatar o título do mês (ex: "Outubro 2023")
+  const formatMonthTitle = (dateKey) => {
+    const [year, month] = dateKey.split("-");
+    const date = new Date(year, month - 1);
+    return date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  };
+
+  // --- ACTIONS ---
 
   const handleNovaDespesa = () => {
     setItemParaEditar(null);
@@ -128,6 +201,9 @@ export default function ContasPagar() {
     return `${day}/${month}/${year}`;
   };
 
+  // Gera os grupos para renderizar
+  const groupedTransactions = groupTransactionsByMonth(filteredTransacoes);
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-8">
@@ -167,7 +243,7 @@ export default function ContasPagar() {
         />
         <div className="p-4 rounded-xl border border-gray-200 bg-gray-50 flex flex-col justify-center">
           <span className="text-xs text-gray-500 font-bold uppercase mb-1">
-            Total do Período
+            Total (Filtro)
           </span>
           <span className="text-lg font-bold text-gray-800">
             {formatMoney(resumo.total)}
@@ -176,18 +252,40 @@ export default function ContasPagar() {
       </div>
 
       <div className="flex gap-3 mb-6">
-        <div className="flex-1 bg-gray-50 rounded-lg flex items-center px-4 border border-gray-200">
+        <div className="flex-1 bg-gray-50 rounded-lg flex items-center px-4 border border-gray-200 focus-within:border-blue-400 transition-colors">
           <Search size={18} className="text-gray-400 mr-2" />
           <input
             type="text"
-            placeholder="Pesquisar..."
+            placeholder="Pesquisar por descrição, fornecedor ou categoria..."
             className="bg-transparent w-full py-2 outline-none text-sm text-gray-700"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
           />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm("")}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X size={16} />
+            </button>
+          )}
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50">
+
+        <button
+          onClick={() => setFilterMonth(!filterMonth)}
+          className={`flex items-center gap-2 px-4 py-2 border rounded-lg text-sm font-bold transition-all ${
+            filterMonth
+              ? "bg-blue-50 border-blue-200 text-blue-600"
+              : "border-gray-200 text-gray-600 hover:bg-gray-50"
+          }`}
+        >
           <CalIcon size={16} /> Este Mês
         </button>
-        <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50">
+
+        <button
+          className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 opacity-50 cursor-not-allowed"
+          title="Em breve"
+        >
           <Filter size={16} /> Filtros
         </button>
       </div>
@@ -212,174 +310,201 @@ export default function ContasPagar() {
                   Carregando...
                 </td>
               </tr>
-            ) : transacoes.length === 0 ? (
+            ) : groupedTransactions.length === 0 ? (
               <tr>
                 <td
                   colSpan="7"
                   className="p-12 text-center text-gray-400 border-dashed border-2 border-gray-100 rounded-lg"
                 >
-                  Nenhuma conta encontrada.
+                  Nenhuma conta encontrada para este filtro.
                 </td>
               </tr>
             ) : (
-              transacoes.map((item) => (
-                <React.Fragment key={item.id}>
-                  <tr
-                    onClick={() => toggleRow(item.id)}
-                    className={`border-b border-gray-50 hover:bg-blue-50/30 transition-colors group cursor-pointer ${
-                      expandedRows[item.id] ? "bg-blue-50/50" : ""
-                    }`}
-                  >
-                    <td className="p-4 font-mono text-gray-600 text-xs">
-                      {formatDate(item.data_vencimento)}
-                      {item.status !== "pago" &&
-                        item.data_vencimento <
-                          new Date().toISOString().split("T")[0] && (
-                          <span
-                            className="ml-2 text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold"
-                            title="Vencido"
-                          >
-                            !
-                          </span>
-                        )}
-                    </td>
-                    <td className="p-4 text-xs">
-                      {item.status === "pago" && item.data_pagamento ? (
-                        <span className="text-green-600 font-bold">
-                          {formatDate(item.data_pagamento.split("T")[0])}
+              // ITERAÇÃO SOBRE OS GRUPOS DE MESES
+              groupedTransactions.map((group) => (
+                <React.Fragment key={group.key}>
+                  {/* CABEÇALHO DO MÊS */}
+                  <tr className="bg-gray-100 border-y border-gray-200">
+                    <td colSpan="7" className="p-2 px-4">
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-gray-600 text-xs uppercase tracking-wide">
+                          {formatMonthTitle(group.key)}
                         </span>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center gap-2">
-                        {expandedRows[item.id] ? (
-                          <ChevronUp size={14} className="text-gray-400" />
-                        ) : (
-                          <ChevronDown size={14} className="text-gray-400" />
-                        )}
-                        <div>
-                          <p className="font-bold text-gray-800 text-sm">
-                            {item.descricao}
-                          </p>
-                          {item.financeiro_entidades && (
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              {item.financeiro_entidades.nome}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      {item.financeiro_categorias ? (
-                        <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs font-medium border border-gray-200">
-                          {item.financeiro_categorias.nome}
+                        <span className="text-xs font-bold text-gray-500">
+                          Total: {formatMoney(group.total)}
                         </span>
-                      ) : (
-                        <span className="text-gray-300 text-xs">-</span>
-                      )}
-                    </td>
-                    <td className="p-4 text-right font-bold text-gray-700">
-                      {formatMoney(item.valor)}
-                    </td>
-                    <td className="p-4 text-center">
-                      <StatusBadge status={item.status} />
-                    </td>
-
-                    <td className="p-4">
-                      <div className="flex justify-center gap-1">
-                        <button
-                          onClick={(e) => handleToggleStatus(item, e)}
-                          className={`p-1.5 rounded-md border transition-all ${
-                            item.status === "pago"
-                              ? "bg-white text-gray-400 border-gray-200 hover:text-orange-500"
-                              : "bg-green-50 text-green-600 border-green-200 hover:bg-green-100"
-                          }`}
-                          title={item.status === "pago" ? "Reabrir" : "Pagar"}
-                        >
-                          {item.status === "pago" ? (
-                            <XCircle size={16} />
-                          ) : (
-                            <CheckCircle size={16} />
-                          )}
-                        </button>
-                        <button
-                          onClick={(e) => handleEditar(item, e)}
-                          className="p-1.5 bg-white border border-gray-200 text-blue-600 rounded-md hover:bg-blue-50 transition-all"
-                          title="Editar"
-                        >
-                          <Edit size={16} />
-                        </button>
-                        <button
-                          onClick={(e) => handleDelete(item.id, e)}
-                          className="p-1.5 bg-white border border-gray-200 text-red-500 rounded-md hover:bg-red-50 transition-all"
-                          title="Excluir"
-                        >
-                          <Trash2 size={16} />
-                        </button>
                       </div>
                     </td>
                   </tr>
 
-                  {expandedRows[item.id] && (
-                    <tr className="bg-gray-50 border-b border-gray-200">
-                      <td colSpan="7" className="p-4 px-8">
-                        <div className="grid grid-cols-4 gap-6 text-sm">
-                          <div>
-                            <p className="text-xs font-bold text-gray-400 uppercase">
-                              Centro de Custo
-                            </p>
-                            <p className="text-gray-700 capitalize">
-                              {item.centro_custo || "-"}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-gray-400 uppercase">
-                              Competência
-                            </p>
-                            <p className="text-gray-700">
-                              {formatDate(item.data_competencia)}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-gray-400 uppercase">
-                              Forma Pagto
-                            </p>
-                            <p className="text-gray-700 capitalize">
-                              {item.forma_pagamento || "-"}
-                            </p>
-                          </div>
-                          <div className="col-span-1">
-                            {item.anexo_url ? (
-                              <a
-                                href={item.anexo_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-2 text-blue-600 hover:underline mt-2"
+                  {/* ITENS DO MÊS */}
+                  {group.items.map((item) => (
+                    <React.Fragment key={item.id}>
+                      <tr
+                        onClick={() => toggleRow(item.id)}
+                        className={`border-b border-gray-50 hover:bg-blue-50/30 transition-colors group cursor-pointer ${
+                          expandedRows[item.id] ? "bg-blue-50/50" : ""
+                        }`}
+                      >
+                        <td className="p-4 font-mono text-gray-600 text-xs">
+                          {formatDate(item.data_vencimento)}
+                          {item.status !== "pago" &&
+                            item.data_vencimento <
+                              new Date().toISOString().split("T")[0] && (
+                              <span
+                                className="ml-2 text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold"
+                                title="Vencido"
                               >
-                                <Paperclip size={14} /> Ver Comprovante/Anexo
-                              </a>
-                            ) : (
-                              <p className="text-xs text-gray-400 italic mt-2">
-                                Sem anexo.
-                              </p>
+                                !
+                              </span>
                             )}
-                          </div>
-                          {item.observacoes && (
-                            <div className="col-span-4 mt-2 p-3 bg-white border border-gray-200 rounded-lg">
-                              <p className="text-xs font-bold text-gray-400 uppercase mb-1">
-                                Observações
-                              </p>
-                              <p className="text-gray-600 italic">
-                                {item.observacoes}
-                              </p>
-                            </div>
+                        </td>
+                        <td className="p-4 text-xs">
+                          {item.status === "pago" && item.data_pagamento ? (
+                            <span className="text-green-600 font-bold">
+                              {formatDate(item.data_pagamento.split("T")[0])}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center gap-2">
+                            {expandedRows[item.id] ? (
+                              <ChevronUp size={14} className="text-gray-400" />
+                            ) : (
+                              <ChevronDown
+                                size={14}
+                                className="text-gray-400"
+                              />
+                            )}
+                            <div>
+                              <p className="font-bold text-gray-800 text-sm">
+                                {item.descricao}
+                              </p>
+                              {item.financeiro_entidades && (
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                  {item.financeiro_entidades.nome}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          {item.financeiro_categorias ? (
+                            <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs font-medium border border-gray-200">
+                              {item.financeiro_categorias.nome}
+                            </span>
+                          ) : (
+                            <span className="text-gray-300 text-xs">-</span>
+                          )}
+                        </td>
+                        <td className="p-4 text-right font-bold text-gray-700">
+                          {formatMoney(item.valor)}
+                        </td>
+                        <td className="p-4 text-center">
+                          <StatusBadge status={item.status} />
+                        </td>
+
+                        <td className="p-4">
+                          <div className="flex justify-center gap-1">
+                            <button
+                              onClick={(e) => handleToggleStatus(item, e)}
+                              className={`p-1.5 rounded-md border transition-all ${
+                                item.status === "pago"
+                                  ? "bg-white text-gray-400 border-gray-200 hover:text-orange-500"
+                                  : "bg-green-50 text-green-600 border-green-200 hover:bg-green-100"
+                              }`}
+                              title={
+                                item.status === "pago" ? "Reabrir" : "Pagar"
+                              }
+                            >
+                              {item.status === "pago" ? (
+                                <XCircle size={16} />
+                              ) : (
+                                <CheckCircle size={16} />
+                              )}
+                            </button>
+                            <button
+                              onClick={(e) => handleEditar(item, e)}
+                              className="p-1.5 bg-white border border-gray-200 text-blue-600 rounded-md hover:bg-blue-50 transition-all"
+                              title="Editar"
+                            >
+                              <Edit size={16} />
+                            </button>
+                            <button
+                              onClick={(e) => handleDelete(item.id, e)}
+                              className="p-1.5 bg-white border border-gray-200 text-red-500 rounded-md hover:bg-red-50 transition-all"
+                              title="Excluir"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* DETALHES (EXPANSÃO) */}
+                      {expandedRows[item.id] && (
+                        <tr className="bg-gray-50 border-b border-gray-200">
+                          <td colSpan="7" className="p-4 px-8">
+                            <div className="grid grid-cols-4 gap-6 text-sm">
+                              <div>
+                                <p className="text-xs font-bold text-gray-400 uppercase">
+                                  Centro de Custo
+                                </p>
+                                <p className="text-gray-700 capitalize">
+                                  {item.centro_custo || "-"}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs font-bold text-gray-400 uppercase">
+                                  Competência
+                                </p>
+                                <p className="text-gray-700">
+                                  {formatDate(item.data_competencia)}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs font-bold text-gray-400 uppercase">
+                                  Forma Pagto
+                                </p>
+                                <p className="text-gray-700 capitalize">
+                                  {item.forma_pagamento || "-"}
+                                </p>
+                              </div>
+                              <div className="col-span-1">
+                                {item.anexo_url ? (
+                                  <a
+                                    href={item.anexo_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 text-blue-600 hover:underline mt-2"
+                                  >
+                                    <Paperclip size={14} /> Ver
+                                    Comprovante/Anexo
+                                  </a>
+                                ) : (
+                                  <p className="text-xs text-gray-400 italic mt-2">
+                                    Sem anexo.
+                                  </p>
+                                )}
+                              </div>
+                              {item.observacoes && (
+                                <div className="col-span-4 mt-2 p-3 bg-white border border-gray-200 rounded-lg">
+                                  <p className="text-xs font-bold text-gray-400 uppercase mb-1">
+                                    Observações
+                                  </p>
+                                  <p className="text-gray-600 italic">
+                                    {item.observacoes}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
                 </React.Fragment>
               ))
             )}

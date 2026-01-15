@@ -54,6 +54,7 @@ export default function AdminPacientesDetalhes() {
   const [editingEvolucaoId, setEditingEvolucaoId] = useState(null);
   const [evolucaoForm, setEvolucaoForm] = useState({
     funcionario_id: "",
+    data_registro: new Date().toISOString().split("T")[0],
     turno: "Diurno",
     texto: "",
     diurese: false,
@@ -194,6 +195,9 @@ export default function AdminPacientesDetalhes() {
 
     setEvolucaoForm({
       funcionario_id: funcEncontrado ? funcEncontrado.id : "",
+      data_registro: item.data_registro
+        ? item.data_registro.split("T")[0]
+        : new Date().toISOString().split("T")[0],
       turno: item.turno,
       texto: item.texto_evolucao,
       diurese: item.diurese_presente,
@@ -211,6 +215,7 @@ export default function AdminPacientesDetalhes() {
     setEditingEvolucaoId(null);
     setEvolucaoForm({
       funcionario_id: "",
+      data_registro: new Date().toISOString().split("T")[0],
       turno: "Diurno",
       texto: "",
       diurese: false,
@@ -259,6 +264,7 @@ export default function AdminPacientesDetalhes() {
       const payload = {
         paciente_id: id,
         profissional_nome: nomeProfissional,
+        data_registro: evolucaoForm.data_registro,
         turno: evolucaoForm.turno,
         texto_evolucao: evolucaoForm.texto,
         diurese_presente: evolucaoForm.diurese,
@@ -747,19 +753,21 @@ export default function AdminPacientesDetalhes() {
                     </button>
                   )}
                 </div>
-
                 <form onSubmit={handleSalvarEvolucao} className="space-y-5">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                     <div>
-                      <label className="label-mini mb-1">Profissional</label>
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                        Profissional
+                      </label>
                       <select
                         name="funcionario_id"
                         value={evolucaoForm.funcionario_id}
                         onChange={handleEvolucaoChange}
-                        className="input-mini bg-white w-full h-10"
-                        required
+                        className="w-full p-2 rounded-lg border bg-gray-50 focus:bg-white transition-colors outline-none focus:border-primary"
                       >
-                        <option value="">Selecione...</option>
+                        <option value="">
+                          Selecione (ou deixe auto se for admin)
+                        </option>
                         {listaFuncionarios.map((f) => (
                           <option key={f.id} value={f.id}>
                             {f.nome_completo}
@@ -767,21 +775,34 @@ export default function AdminPacientesDetalhes() {
                         ))}
                       </select>
                     </div>
-
                     <div>
-                      <label className="label-mini mb-1">Turno</label>
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                        Data
+                      </label>
+                      <input
+                        type="date"
+                        name="data_registro"
+                        value={evolucaoForm.data_registro}
+                        onChange={handleEvolucaoChange}
+                        className="w-full p-2 rounded-lg border bg-gray-50 focus:bg-white transition-colors outline-none focus:border-primary"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                        Turno
+                      </label>
                       <select
                         name="turno"
                         value={evolucaoForm.turno}
                         onChange={handleEvolucaoChange}
-                        className="input-mini bg-white w-full h-10"
+                        className="w-full p-2 rounded-lg border bg-gray-50 focus:bg-white transition-colors outline-none focus:border-primary"
                       >
                         <option>Diurno</option>
                         <option>Noturno</option>
                       </select>
                     </div>
                   </div>
-
                   <div>
                     <label className="label-mini mb-1 font-bold text-darkText">
                       Descrição Detalhada
