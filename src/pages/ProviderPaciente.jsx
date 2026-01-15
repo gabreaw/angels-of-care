@@ -10,6 +10,7 @@ import {
   Edit,
   X,
   Save,
+  ExternalLink,
 } from "lucide-react";
 
 export default function ProviderPaciente() {
@@ -22,6 +23,7 @@ export default function ProviderPaciente() {
   const [evolucoes, setEvolucoes] = useState([]);
   const [medicamentos, setMedicamentos] = useState([]);
   const [editingId, setEditingId] = useState(null);
+
   const [formData, setFormData] = useState({
     turno: "Diurno",
     texto: "",
@@ -30,7 +32,7 @@ export default function ProviderPaciente() {
     higiene: false,
     decubito: false,
     aspiracao: false,
-    arquivo_url: null,
+    arquivo_urls: [],
   });
 
   useEffect(() => {
@@ -82,6 +84,19 @@ export default function ProviderPaciente() {
 
   const handleEditClick = (evo) => {
     setEditingId(evo.id);
+    let arquivosExistentes = [];
+    try {
+      if (evo.arquivo_url) {
+        if (evo.arquivo_url.startsWith("[")) {
+          arquivosExistentes = JSON.parse(evo.arquivo_url);
+        } else {
+          arquivosExistentes = [evo.arquivo_url];
+        }
+      }
+    } catch (e) {
+      arquivosExistentes = evo.arquivo_url ? [evo.arquivo_url] : [];
+    }
+
     setFormData({
       turno: evo.turno,
       texto: evo.texto_evolucao,
@@ -90,7 +105,7 @@ export default function ProviderPaciente() {
       higiene: evo.higiene_realizada,
       decubito: evo.mudanca_decubito,
       aspiracao: evo.aspiracao_tqt,
-      arquivo_url: evo.arquivo_url,
+      arquivo_urls: arquivosExistentes,
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -105,7 +120,7 @@ export default function ProviderPaciente() {
       higiene: false,
       decubito: false,
       aspiracao: false,
-      arquivo_url: null,
+      arquivo_urls: [],
     });
   };
 
@@ -130,25 +145,29 @@ export default function ProviderPaciente() {
       }
 
       const fileInput = e.target.anexo;
-      let finalUrl = formData.arquivo_url;
+      let newUrls = [];
+      if (fileInput && fileInput.files.length > 0) {
+        for (const file of fileInput.files) {
+          const fileExt = file.name.split(".").pop();
+          const fileName = `${Date.now()}-${Math.random()
+            .toString(36)
+            .substr(2, 9)}.${fileExt}`;
+          const filePath = `${id}/${fileName}`;
 
-      if (fileInput && fileInput.files[0]) {
-        const file = fileInput.files[0];
-        const fileExt = file.name.split(".").pop();
-        const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
-        const filePath = `${id}/${fileName}`;
-
-        const { error: upErr } = await supabase.storage
-          .from("evolucoes")
-          .upload(filePath, file);
-
-        if (!upErr) {
-          const { data: urlData } = supabase.storage
+          const { error: upErr } = await supabase.storage
             .from("evolucoes")
-            .getPublicUrl(filePath);
-          finalUrl = urlData.publicUrl;
+            .upload(filePath, file);
+
+          if (!upErr) {
+            const { data: urlData } = supabase.storage
+              .from("evolucoes")
+              .getPublicUrl(filePath);
+            newUrls.push(urlData.publicUrl);
+          }
         }
       }
+      const finalUrls = [...formData.arquivo_urls, ...newUrls];
+      const arquivoUrlString = JSON.stringify(finalUrls);
 
       const payload = {
         paciente_id: id,
@@ -160,7 +179,7 @@ export default function ProviderPaciente() {
         aspiracao_tqt: formData.aspiracao,
         mudanca_decubito: formData.decubito,
         higiene_realizada: formData.higiene,
-        arquivo_url: finalUrl,
+        arquivo_url: arquivoUrlString,
       };
 
       if (editingId) {
@@ -177,13 +196,24 @@ export default function ProviderPaciente() {
         if (error) throw error;
         alert("Evolução registrada com sucesso!");
       }
-
+      e.target.reset();
       handleCancelEdit();
       fetchEvolucoes();
     } catch (error) {
       alert("Erro ao salvar: " + error.message);
     } finally {
       setUploading(false);
+    }
+  };
+  const parseArquivos = (urlData) => {
+    if (!urlData) return [];
+    try {
+      if (urlData.startsWith("[")) {
+        return JSON.parse(urlData);
+      }
+      return [urlData];
+    } catch (e) {
+      return [urlData];
     }
   };
 
@@ -348,24 +378,47 @@ export default function ProviderPaciente() {
                     <span className="text-xs">Aspiração</span>
                   </label>
                 </div>
-
                 <div className="border border-dashed border-blue-200 bg-blue-50/50 p-3 rounded-xl">
                   <label className="flex items-center gap-2 text-blue-700 text-xs font-bold justify-center cursor-pointer">
                     <Paperclip size={14} />
-                    {formData.arquivo_url
-                      ? "Substituir Anexo"
-                      : "Anexar Foto/Doc"}
+                    {formData.arquivo_urls.length > 0
+                      ? "Adicionar mais arquivos"
+                      : "Anexar Fotos/Docs"}
                     <input
                       type="file"
                       name="anexo"
                       className="hidden"
-                      accept="image/*"
+                      accept="image/*,application/pdf"
+                      multiple
                     />
                   </label>
-                  {formData.arquivo_url && (
-                    <p className="text-[10px] text-center text-green-600 mt-1 truncate">
-                      Arquivo atual: ...{formData.arquivo_url.slice(-15)}
-                    </p>
+                  {formData.arquivo_urls.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {formData.arquivo_urls.map((url, index) => (
+                        <div
+                          key={index}
+                          className="flex justify-between items-center text-[10px] text-green-600 bg-white px-2 py-1 rounded border border-green-100"
+                        >
+                          <span className="truncate max-w-[200px]">
+                            Anexo {index + 1}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                arquivo_urls: prev.arquivo_urls.filter(
+                                  (_, i) => i !== index
+                                ),
+                              }))
+                            }
+                            className="text-red-500 hover:text-red-700 font-bold ml-2"
+                          >
+                            X
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
 
@@ -389,6 +442,7 @@ export default function ProviderPaciente() {
                 </button>
               </form>
             </div>
+
             <div className="space-y-3 pb-10">
               <h4 className="text-xs font-bold text-gray-400 uppercase ml-1">
                 Últimos Registros
@@ -421,6 +475,9 @@ export default function ProviderPaciente() {
                           minute: "2-digit",
                         })}
                       </span>
+                      <span className="text-xs text-gray-400">
+                        • {evo.profissional_nome}
+                      </span>
                     </div>
 
                     <button
@@ -431,9 +488,26 @@ export default function ProviderPaciente() {
                       <Edit size={16} />
                     </button>
                   </div>
+
                   <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
                     {evo.texto_evolucao}
                   </p>
+                  {evo.arquivo_url && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {parseArquivos(evo.arquivo_url).map((url, index) => (
+                        <a
+                          key={index}
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 text-blue-700 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors"
+                        >
+                          <ExternalLink size={14} />
+                          Anexo {index + 1}
+                        </a>
+                      ))}
+                    </div>
+                  )}
                   <div className="flex flex-wrap gap-1 mt-3 opacity-80">
                     {evo.diurese_presente && (
                       <span className="text-[9px] border px-1 rounded bg-gray-50">
@@ -513,6 +587,7 @@ export default function ProviderPaciente() {
             </div>
           </div>
         )}
+
         {activeTab === "meds" && (
           <div className="space-y-3">
             {medicamentos.length === 0 && (
@@ -543,7 +618,6 @@ export default function ProviderPaciente() {
             ))}
           </div>
         )}
-        {activeTab === "meds" && <div className="space-y-3"></div>}
       </div>
     </div>
   );
