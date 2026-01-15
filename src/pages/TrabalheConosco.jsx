@@ -168,7 +168,6 @@ export default function TrabalheConosco() {
   return (
     <div className="min-h-screen bg-[#FDFBF7] py-12 px-4 font-sans">
       <div className="max-w-4xl mx-auto">
-        {/* HEADER EMOCIONAL */}
         <div className="text-center mb-12">
           <h1 className="text-4xl md:text-5xl font-serif text-primary font-bold mb-4">
             Trabalhe Conosco
@@ -183,9 +182,8 @@ export default function TrabalheConosco() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-8">
-          {/* 1. DADOS PESSOAIS */}
           <Section title="Dados Pessoais" icon={User}>
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input
                 label="Nome Completo"
                 name="nome_completo"
@@ -221,7 +219,7 @@ export default function TrabalheConosco() {
                 required
               />
             </div>
-            <div className="grid grid-cols-3 gap-4 mt-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
               <Input
                 label="CEP"
                 name="cep"
@@ -246,16 +244,14 @@ export default function TrabalheConosco() {
               />
             </div>
           </Section>
-
-          {/* 2. FORMAÇÃO */}
           <Section title="Formação e Qualificação" icon={BookOpen}>
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <Label>Qual sua função principal?</Label>
                 <select
                   name="funcao"
                   onChange={handleChange}
-                  className="input-field bg-white"
+                  className="input-field bg-white w-full"
                 >
                   <option>Cuidador(a)</option>
                   <option>Técnico de Enfermagem</option>
@@ -268,11 +264,11 @@ export default function TrabalheConosco() {
                   name="instituicao_curso"
                   placeholder="Ex: Senac / 2022"
                   onChange={handleChange}
-                  className="input-field"
+                  className="input-field w-full" // Garante largura total
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-6 mt-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
               <RadioGroup
                 label="Possui curso de cuidador?"
                 name="possui_curso"
@@ -287,8 +283,6 @@ export default function TrabalheConosco() {
               />
             </div>
           </Section>
-
-          {/* 3. EXPERIÊNCIA */}
           <Section title="Experiência Profissional" icon={Briefcase}>
             <Label>Tempo de experiência em Home Care</Label>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
