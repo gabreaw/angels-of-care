@@ -21,15 +21,11 @@ export default function ContasPagar() {
   const [transacoes, setTransacoes] = useState([]);
   const [filteredTransacoes, setFilteredTransacoes] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  // Filter States
   const [searchTerm, setSearchTerm] = useState("");
   const [filterMonth, setFilterMonth] = useState(false);
-
   const [modalOpen, setModalOpen] = useState(false);
   const [itemParaEditar, setItemParaEditar] = useState(null);
   const [expandedRows, setExpandedRows] = useState({});
-
   const [resumo, setResumo] = useState({
     vencidos: 0,
     hoje: 0,
@@ -111,14 +107,11 @@ export default function ContasPagar() {
     });
     setResumo({ vencidos: v, hoje: h, aVencer: av, pago: p, total: t });
   }
-
-  // --- NOVA FUNÇÃO: AGRUPAR POR MÊS ---
   function groupTransactionsByMonth(transactions) {
     const groups = {};
 
     transactions.forEach((item) => {
       if (!item.data_vencimento) return;
-      // Pega "2023-10" do "2023-10-25"
       const monthKey = item.data_vencimento.slice(0, 7);
 
       if (!groups[monthKey]) {
@@ -131,7 +124,6 @@ export default function ContasPagar() {
       groups[monthKey].total += Number(item.valor);
     });
 
-    // Retorna ordenado pela chave (data)
     return Object.keys(groups)
       .sort()
       .map((key) => ({
@@ -140,14 +132,11 @@ export default function ContasPagar() {
       }));
   }
 
-  // Helper para formatar o título do mês (ex: "Outubro 2023")
   const formatMonthTitle = (dateKey) => {
     const [year, month] = dateKey.split("-");
     const date = new Date(year, month - 1);
     return date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
   };
-
-  // --- ACTIONS ---
 
   const handleNovaDespesa = () => {
     setItemParaEditar(null);
@@ -201,7 +190,6 @@ export default function ContasPagar() {
     return `${day}/${month}/${year}`;
   };
 
-  // Gera os grupos para renderizar
   const groupedTransactions = groupTransactionsByMonth(filteredTransacoes);
 
   return (
@@ -320,10 +308,8 @@ export default function ContasPagar() {
                 </td>
               </tr>
             ) : (
-              // ITERAÇÃO SOBRE OS GRUPOS DE MESES
               groupedTransactions.map((group) => (
                 <React.Fragment key={group.key}>
-                  {/* CABEÇALHO DO MÊS */}
                   <tr className="bg-gray-100 border-y border-gray-200">
                     <td colSpan="7" className="p-2 px-4">
                       <div className="flex justify-between items-center">
@@ -336,8 +322,6 @@ export default function ContasPagar() {
                       </div>
                     </td>
                   </tr>
-
-                  {/* ITENS DO MÊS */}
                   {group.items.map((item) => (
                     <React.Fragment key={item.id}>
                       <tr
