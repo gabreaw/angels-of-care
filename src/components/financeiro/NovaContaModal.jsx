@@ -1,14 +1,30 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
-import { X, Save, Wallet } from "lucide-react";
+import { X, Save, Wallet, Loader2 } from "lucide-react";
 
-export default function NovaContaModal({ onClose, onSuccess }) {
+export default function NovaContaModal({
+  onClose,
+  onSuccess,
+  contaParaEditar = null,
+}) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     nome: "",
     tipo: "corrente",
     saldo_inicial: "0,00",
   });
+
+  useEffect(() => {
+    if (contaParaEditar) {
+      setFormData({
+        nome: contaParaEditar.nome,
+        tipo: contaParaEditar.tipo,
+        saldo_inicial: new Intl.NumberFormat("pt-BR", {
+          minimumFractionDigits: 2,
+        }).format(contaParaEditar.saldo_inicial),
+      });
+    }
+  }, [contaParaEditar]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -22,24 +38,36 @@ export default function NovaContaModal({ onClose, onSuccess }) {
     setLoading(true);
     try {
       const saldoFloat = parseFloat(
-        formData.saldo_inicial.replace(/\./g, "").replace(",", ".")
+        String(formData.saldo_inicial).replace(/\./g, "").replace(",", ".")
       );
 
-      const { error } = await supabase.from("financeiro_contas").insert([
-        {
-          nome: formData.nome,
-          tipo: formData.tipo,
-          saldo_inicial: isNaN(saldoFloat) ? 0 : saldoFloat,
-        },
-      ]);
+      const payload = {
+        nome: formData.nome,
+        tipo: formData.tipo,
+        saldo_inicial: isNaN(saldoFloat) ? 0 : saldoFloat,
+      };
 
-      if (error) throw error;
+      if (contaParaEditar) {
+        const { error } = await supabase
+          .from("financeiro_contas")
+          .update(payload)
+          .eq("id", contaParaEditar.id);
 
-      alert("Conta cadastrada com sucesso!");
+        if (error) throw error;
+        alert("Conta atualizada com sucesso!");
+      } else {
+        const { error } = await supabase
+          .from("financeiro_contas")
+          .insert([payload]);
+
+        if (error) throw error;
+        alert("Conta cadastrada com sucesso!");
+      }
+
       if (onSuccess) onSuccess();
       onClose();
     } catch (err) {
-      alert("Erro ao cadastrar conta: " + err.message);
+      alert("Erro ao salvar conta: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -50,7 +78,8 @@ export default function NovaContaModal({ onClose, onSuccess }) {
       <div className="bg-white w-full max-w-md rounded-xl shadow-2xl flex flex-col">
         <div className="flex justify-between items-center p-5 border-b border-gray-100">
           <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-            <Wallet size={20} className="text-primary" /> Nova Conta / Caixa
+            <Wallet size={20} className="text-purple-600" />
+            {contaParaEditar ? "Editar Conta" : "Nova Conta / Caixa"}
           </h2>
           <button
             onClick={onClose}
@@ -59,6 +88,7 @@ export default function NovaContaModal({ onClose, onSuccess }) {
             <X size={20} />
           </button>
         </div>
+
         <form id="form-conta" onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
             <label className="text-xs font-bold text-gray-500 mb-1 block">
@@ -70,7 +100,7 @@ export default function NovaContaModal({ onClose, onSuccess }) {
               value={formData.nome}
               onChange={handleChange}
               placeholder="Ex: Nubank Principal, Caixa Físico"
-              className="w-full p-2.5 border rounded-lg focus:border-primary outline-none text-sm"
+              className="w-full p-2.5 border rounded-lg focus:border-purple-500 outline-none text-sm"
               required
             />
           </div>
@@ -107,6 +137,7 @@ export default function NovaContaModal({ onClose, onSuccess }) {
             </div>
           </div>
         </form>
+
         <div className="p-4 border-t border-gray-100 flex justify-end gap-3 bg-gray-50 rounded-b-xl">
           <button
             onClick={onClose}

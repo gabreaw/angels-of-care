@@ -1,8 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import { X, Save } from "lucide-react";
 
-export default function NovoFornecedorModal({ onClose, onSuccess }) {
+export default function NovoFornecedorModal({
+  onClose,
+  onSuccess,
+  fornecedorParaEditar = null,
+}) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     tipo_pessoa: "juridica",
@@ -10,7 +14,6 @@ export default function NovoFornecedorModal({ onClose, onSuccess }) {
     nome: "",
     nome_fantasia: "",
     tipo_relacao: "fornecedor",
-
     email: "",
     telefone_celular: "",
     cep: "",
@@ -26,6 +29,33 @@ export default function NovoFornecedorModal({ onClose, onSuccess }) {
     inscricao_suframa: "",
     optante_simples: false,
   });
+
+  // Load data if editing
+  useEffect(() => {
+    if (fornecedorParaEditar) {
+      setFormData({
+        tipo_pessoa: fornecedorParaEditar.tipo_pessoa || "juridica",
+        cpf_cnpj: fornecedorParaEditar.cpf_cnpj || "",
+        nome: fornecedorParaEditar.nome || "",
+        nome_fantasia: fornecedorParaEditar.nome_fantasia || "",
+        tipo_relacao: fornecedorParaEditar.tipo_relacao || "fornecedor",
+        email: fornecedorParaEditar.email || "",
+        telefone_celular: fornecedorParaEditar.telefone_celular || "",
+        cep: fornecedorParaEditar.cep || "",
+        endereco: fornecedorParaEditar.endereco || "",
+        numero: fornecedorParaEditar.numero || "",
+        bairro: fornecedorParaEditar.bairro || "",
+        cidade: fornecedorParaEditar.cidade || "",
+        estado: fornecedorParaEditar.estado || "",
+        observacoes: fornecedorParaEditar.observacoes || "",
+        indicador_ie: fornecedorParaEditar.indicador_ie || "nao_contribuinte",
+        inscricao_estadual: fornecedorParaEditar.inscricao_estadual || "",
+        inscricao_municipal: fornecedorParaEditar.inscricao_municipal || "",
+        inscricao_suframa: fornecedorParaEditar.inscricao_suframa || "",
+        optante_simples: fornecedorParaEditar.optante_simples || false,
+      });
+    }
+  }, [fornecedorParaEditar]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -45,16 +75,29 @@ export default function NovoFornecedorModal({ onClose, onSuccess }) {
     try {
       const payload = { ...formData, tipo_relacao: "fornecedor" };
 
-      const { error } = await supabase
-        .from("financeiro_entidades")
-        .insert([payload]);
+      if (fornecedorParaEditar) {
+        // UPDATE Logic
+        const { error } = await supabase
+          .from("financeiro_entidades")
+          .update(payload)
+          .eq("id", fornecedorParaEditar.id);
 
-      if (error) throw error;
-      alert("Cadastro realizado com sucesso!");
+        if (error) throw error;
+        alert("Fornecedor atualizado com sucesso!");
+      } else {
+        // INSERT Logic
+        const { error } = await supabase
+          .from("financeiro_entidades")
+          .insert([payload]);
+
+        if (error) throw error;
+        alert("Cadastro realizado com sucesso!");
+      }
+
       onSuccess();
       onClose();
     } catch (error) {
-      alert("Erro ao cadastrar: " + error.message);
+      alert("Erro ao salvar: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -86,6 +129,7 @@ export default function NovoFornecedorModal({ onClose, onSuccess }) {
         estado: data.uf,
         email: data.email || "",
         telefone_celular: data.ddd_telefone_1 || "",
+        optante_simples: data.opcao_pelo_simples || false,
       }));
     } catch (error) {
       alert("Erro ao buscar CNPJ: " + error.message);
@@ -98,7 +142,9 @@ export default function NovoFornecedorModal({ onClose, onSuccess }) {
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="bg-white w-full max-w-6xl rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
         <div className="flex justify-between items-center p-6 border-b border-gray-100">
-          <h2 className="text-xl font-bold text-gray-800">Novo Fornecedor</h2>
+          <h2 className="text-xl font-bold text-gray-800">
+            {fornecedorParaEditar ? "Editar Fornecedor" : "Novo Fornecedor"}
+          </h2>
           <button onClick={onClose}>
             <X size={24} className="text-gray-400 hover:text-red-500" />
           </button>
@@ -179,12 +225,11 @@ export default function NovoFornecedorModal({ onClose, onSuccess }) {
               </div>
             </div>
 
-            {/* 2. INFORMAÇÕES FISCAIS (NOVO BLOCO) */}
+            {/* 2. INFORMAÇÕES FISCAIS */}
             <div className="bg-white p-6 rounded-xl border border-gray-200">
               <div className="flex justify-between items-center mb-4 border-b pb-2">
                 <h3 className="font-bold text-gray-700">Informações Fiscais</h3>
 
-                {/* Optante pelo Simples */}
                 <div className="flex items-center gap-4 text-sm">
                   <span className="font-bold text-gray-500 text-xs">
                     Optante pelo Simples?
@@ -211,7 +256,6 @@ export default function NovoFornecedorModal({ onClose, onSuccess }) {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                {/* Indicador de Inscrição Estadual */}
                 <div className="md:col-span-1">
                   <label className="text-xs font-bold text-gray-500 block mb-1">
                     Indicador de IE
@@ -343,6 +387,8 @@ export default function NovoFornecedorModal({ onClose, onSuccess }) {
                 </div>
               </div>
             </div>
+
+            {/* 4. CONTATO E OBSERVAÇÕES */}
             <div className="bg-white p-6 rounded-xl border border-gray-200">
               <h3 className="font-bold text-gray-700 mb-4 border-b pb-2">
                 Contato e Observações
