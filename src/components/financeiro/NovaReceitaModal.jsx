@@ -11,25 +11,28 @@ import {
   Settings,
   Repeat,
   Trash2,
+  TrendingUp, // Icone diferente para receita
 } from "lucide-react";
-import NovoFornecedorModal from "./NovoFornecedorModal";
+import NovoFornecedorModal from "./NovoFornecedorModal"; // Usamos o mesmo para criar Clientes
 import GerenciarCategoriasModal from "./GerenciarCategoriasModal";
 import NovaContaModal from "./NovaContaModal";
 
-export default function NovaDespesaModal({
+export default function NovaReceitaModal({
   onClose,
   onSuccess,
-  despesaParaEditar = null,
+  receitaParaEditar = null,
 }) {
   const [loading, setLoading] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
-  const [showSupplierModal, setShowSupplierModal] = useState(false);
+
+  // Modais auxiliares
+  const [showClientModal, setShowClientModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
 
   const fileInputRef = useRef(null);
 
-  const [fornecedores, setFornecedores] = useState([]);
+  const [clientes, setClientes] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [contas, setContas] = useState([]);
 
@@ -55,47 +58,44 @@ export default function NovaDespesaModal({
   useEffect(() => {
     fetchData();
 
-    if (despesaParaEditar) {
+    if (receitaParaEditar) {
       let existingUrls = [];
       try {
-        if (despesaParaEditar.anexo_url) {
-          if (despesaParaEditar.anexo_url.trim().startsWith("[")) {
-            existingUrls = JSON.parse(despesaParaEditar.anexo_url);
+        if (receitaParaEditar.anexo_url) {
+          if (receitaParaEditar.anexo_url.trim().startsWith("[")) {
+            existingUrls = JSON.parse(receitaParaEditar.anexo_url);
           } else {
-            existingUrls = [despesaParaEditar.anexo_url];
+            existingUrls = [receitaParaEditar.anexo_url];
           }
         }
       } catch (e) {
-        console.error("Error parsing attachments", e);
-        existingUrls = despesaParaEditar.anexo_url
-          ? [despesaParaEditar.anexo_url]
+        existingUrls = receitaParaEditar.anexo_url
+          ? [receitaParaEditar.anexo_url]
           : [];
       }
 
       setFormData({
-        entidade_id: despesaParaEditar.entidade_id || "",
+        entidade_id: receitaParaEditar.entidade_id || "",
         data_competencia:
-          despesaParaEditar.created_at?.split("T")[0] ||
+          receitaParaEditar.created_at?.split("T")[0] ||
           new Date().toISOString().split("T")[0],
-        descricao: despesaParaEditar.descricao,
-        valor: despesaParaEditar.valor
-          ? formatCurrencyInput(despesaParaEditar.valor)
-          : "",
-        categoria_id: despesaParaEditar.categoria_id || "",
-        centro_custo: despesaParaEditar.centro_custo || "",
-        codigo_referencia: despesaParaEditar.codigo_referencia || "",
-        parcelamento: "avista",
+        descricao: receitaParaEditar.descricao,
+        valor: formatCurrencyInput(receitaParaEditar.valor),
+        categoria_id: receitaParaEditar.categoria_id || "",
+        centro_custo: receitaParaEditar.centro_custo || "",
+        codigo_referencia: receitaParaEditar.codigo_referencia || "",
+        parcelamento: "avista", 
         numero_parcelas: 1,
         frequencia_recorrencia: "mensal",
-        data_vencimento: despesaParaEditar.data_vencimento,
-        forma_pagamento: despesaParaEditar.forma_pagamento || "boleto",
-        conta_id: despesaParaEditar.conta_id || "",
-        status: despesaParaEditar.status,
-        observacoes: despesaParaEditar.observacoes || "",
+        data_vencimento: receitaParaEditar.data_vencimento,
+        forma_pagamento: receitaParaEditar.forma_pagamento || "boleto",
+        conta_id: receitaParaEditar.conta_id || "",
+        status: receitaParaEditar.status,
+        observacoes: receitaParaEditar.observacoes || "",
         anexo_urls: existingUrls,
       });
     }
-  }, [despesaParaEditar]);
+  }, [receitaParaEditar]);
 
   const formatCurrencyInput = (val) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -110,11 +110,11 @@ export default function NovaDespesaModal({
       supabase
         .from("financeiro_categorias")
         .select("*")
-        .eq("tipo", "despesa")
+        .eq("tipo", "receita")
         .order("nome"),
       supabase.from("financeiro_contas").select("*").order("nome"),
     ]);
-    setFornecedores(entRes.data || []);
+    setClientes(entRes.data || []);
     setCategorias(catRes.data || []);
     setContas(accRes.data || []);
   }
@@ -129,21 +129,18 @@ export default function NovaDespesaModal({
     try {
       for (const file of files) {
         const fileExt = file.name.split(".").pop();
-        const fileName = `${Date.now()}-${Math.random()
+        const fileName = `receitas/${Date.now()}-${Math.random()
           .toString(36)
-          .substring(2, 15)}.${fileExt}`;
-        const filePath = `private/despesas/${fileName}`;
+          .substring(2)}.${fileExt}`;
 
         const { error: uploadError } = await supabase.storage
           .from("financeiro")
-          .upload(filePath, file);
-
+          .upload(fileName, file);
         if (uploadError) throw uploadError;
 
         const { data } = supabase.storage
           .from("financeiro")
-          .getPublicUrl(filePath);
-
+          .getPublicUrl(fileName);
         newUrls.push(data.publicUrl);
       }
 
@@ -151,19 +148,18 @@ export default function NovaDespesaModal({
         ...prev,
         anexo_urls: [...prev.anexo_urls, ...newUrls],
       }));
-      alert(`${files.length} arquivo(s) anexado(s) com sucesso!`);
     } catch (error) {
-      alert("Erro ao enviar arquivo: " + error.message);
+      alert("Erro ao enviar: " + error.message);
     } finally {
       setUploadingFile(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
-  const removeAttachment = (indexToRemove) => {
+  const removeAttachment = (index) => {
     setFormData((prev) => ({
       ...prev,
-      anexo_urls: prev.anexo_urls.filter((_, index) => index !== indexToRemove),
+      anexo_urls: prev.anexo_urls.filter((_, i) => i !== index),
     }));
   };
 
@@ -179,10 +175,8 @@ export default function NovaDespesaModal({
         )
       : 0;
 
-    const anexoUrlString = JSON.stringify(formData.anexo_urls);
-
     const payloadBase = {
-      tipo: "despesa",
+      tipo: "receita",
       descricao: formData.descricao,
       status: formData.status,
       categoria_id: formData.categoria_id || null,
@@ -192,11 +186,11 @@ export default function NovaDespesaModal({
       forma_pagamento: formData.forma_pagamento,
       data_pagamento: formData.status === "pago" ? new Date() : null,
       observacoes: formData.observacoes,
-      anexo_url: anexoUrlString,
+      anexo_url: JSON.stringify(formData.anexo_urls),
     };
 
     try {
-      if (despesaParaEditar) {
+      if (receitaParaEditar) {
         const { error } = await supabase
           .from("financeiro_transacoes")
           .update({
@@ -204,13 +198,13 @@ export default function NovaDespesaModal({
             valor: valorTotal,
             data_vencimento: formData.data_vencimento,
           })
-          .eq("id", despesaParaEditar.id);
-
+          .eq("id", receitaParaEditar.id);
         if (error) throw error;
-        alert("Despesa atualizada!");
+        alert("Receita atualizada!");
       } else {
         let lancamentos = [];
 
+        // Lógica de Parcelamento/Recorrência (Idêntica ao Despesa)
         if (
           formData.parcelamento === "parcelado" &&
           formData.numero_parcelas > 1
@@ -219,7 +213,6 @@ export default function NovaDespesaModal({
           for (let i = 0; i < formData.numero_parcelas; i++) {
             const dataBase = new Date(formData.data_vencimento);
             dataBase.setMonth(dataBase.getMonth() + i);
-
             lancamentos.push({
               ...payloadBase,
               descricao: `${formData.descricao} (${i + 1}/${
@@ -270,9 +263,8 @@ export default function NovaDespesaModal({
           .from("financeiro_transacoes")
           .insert(lancamentos);
         if (error) throw error;
-        alert("Despesa salva!");
+        alert("Receita salva!");
       }
-
       onSuccess();
       onClose();
     } catch (err) {
@@ -287,48 +279,42 @@ export default function NovaDespesaModal({
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const mascaraMoeda = (valor) => {
-    const apenasNumeros = String(valor).replace(/\D/g, "");
+  const handleValorChange = (e) => {
+    const valorDigitado = e.target.value;
+    const apenasNumeros = String(valorDigitado).replace(/\D/g, "");
     const numero = Number(apenasNumeros) / 100;
-    return new Intl.NumberFormat("pt-BR", {
+    const valorFormatado = new Intl.NumberFormat("pt-BR", {
       style: "currency",
       currency: "BRL",
     }).format(numero);
-  };
-
-  const handleValorChange = (e) => {
-    const valorDigitado = e.target.value;
-    const valorComMascara = mascaraMoeda(valorDigitado);
-    setFormData((prev) => ({ ...prev, valor: valorComMascara }));
+    setFormData((prev) => ({ ...prev, valor: valorFormatado }));
   };
 
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
         <div className="bg-white w-full max-w-7xl rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
-          <div className="flex justify-between items-center p-6 border-b border-gray-100">
-            <h2 className="text-xl font-bold text-gray-800">
-              {despesaParaEditar ? "Editar Despesa" : "Nova Despesa"}
+          <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-green-50 rounded-t-xl">
+            <h2 className="text-xl font-bold text-green-800 flex items-center gap-2">
+              <TrendingUp size={24} />{" "}
+              {receitaParaEditar ? "Editar Receita" : "Nova Receita"}
             </h2>
             <button onClick={onClose}>
-              <X size={24} className="text-gray-400 hover:text-red-500" />
+              <X size={24} className="text-green-700 hover:text-green-900" />
             </button>
           </div>
 
           <div className="flex-1 overflow-y-auto p-8 bg-gray-50">
             <form
-              id="form-despesa"
+              id="form-receita"
               onSubmit={handleSubmit}
               className="space-y-6"
             >
               <section className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                <h3 className="text-sm font-bold text-gray-800 mb-4 border-b pb-2">
-                  Informações do lançamento
-                </h3>
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                   <div className="md:col-span-4 relative">
                     <label className="text-xs font-bold text-gray-500 mb-1 block">
-                      Fornecedor
+                      Cliente
                     </label>
                     <select
                       name="entidade_id"
@@ -337,7 +323,7 @@ export default function NovaDespesaModal({
                       className="w-full p-2 border rounded-lg bg-white"
                     >
                       <option value="">Selecione...</option>
-                      {fornecedores.map((f) => (
+                      {clientes.map((f) => (
                         <option key={f.id} value={f.id}>
                           {f.nome}
                         </option>
@@ -345,12 +331,13 @@ export default function NovaDespesaModal({
                     </select>
                     <button
                       type="button"
-                      onClick={() => setShowSupplierModal(true)}
+                      onClick={() => setShowClientModal(true)}
                       className="absolute right-0 top-0 text-[10px] font-bold text-blue-600 hover:underline flex items-center gap-1 mt-1 mr-1"
                     >
-                      <PlusCircle size={12} /> Novo Fornecedor
+                      <PlusCircle size={12} /> Novo Cliente
                     </button>
                   </div>
+
                   <div className="md:col-span-2">
                     <label className="text-xs font-bold text-gray-500 mb-1 block">
                       Data competência
@@ -364,6 +351,7 @@ export default function NovaDespesaModal({
                       required
                     />
                   </div>
+
                   <div className="md:col-span-4">
                     <label className="text-xs font-bold text-gray-500 mb-1 block">
                       Descrição *
@@ -377,6 +365,7 @@ export default function NovaDespesaModal({
                       required
                     />
                   </div>
+
                   <div className="md:col-span-2">
                     <label className="text-xs font-bold text-gray-500 mb-1 block">
                       Valor (R$) *
@@ -386,14 +375,15 @@ export default function NovaDespesaModal({
                       name="valor"
                       value={formData.valor}
                       onChange={handleValorChange}
-                      className="w-full p-2 border rounded-lg text-right font-bold"
+                      className="w-full p-2 border rounded-lg text-right font-bold text-green-700"
                       required
                       placeholder="R$ 0,00"
                     />
                   </div>
+
                   <div className="md:col-span-4 relative">
                     <label className="text-xs font-bold text-gray-500 mb-1 block">
-                      Categoria
+                      Categoria (Receita)
                     </label>
                     <select
                       name="categoria_id"
@@ -408,6 +398,7 @@ export default function NovaDespesaModal({
                         </option>
                       ))}
                     </select>
+                    {/* Nota: GerenciarCategoriasModal precisaria de um prop 'tipo' para ser perfeito, mas aqui abre o padrao */}
                     <button
                       type="button"
                       onClick={() => setShowCategoryModal(true)}
@@ -416,6 +407,7 @@ export default function NovaDespesaModal({
                       <Settings size={12} /> Gerenciar
                     </button>
                   </div>
+
                   <div className="md:col-span-4">
                     <label className="text-xs font-bold text-gray-500 mb-1 block">
                       Centro de custo
@@ -431,6 +423,7 @@ export default function NovaDespesaModal({
                       <option value="operacional">Operacional</option>
                     </select>
                   </div>
+
                   <div className="md:col-span-4">
                     <label className="text-xs font-bold text-gray-500 mb-1 block">
                       Código referência
@@ -445,10 +438,11 @@ export default function NovaDespesaModal({
                   </div>
                 </div>
               </section>
+
               <section className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                 <div className="flex items-center gap-2 mb-4 border-b pb-2">
                   <h3 className="text-sm font-bold text-gray-800">
-                    Condição de pagamento
+                    Condição de Recebimento
                   </h3>
                   {formData.parcelamento === "recorrente" && (
                     <span className="text-[10px] bg-blue-100 text-blue-700 px-2 rounded-full font-bold flex items-center gap-1">
@@ -460,32 +454,29 @@ export default function NovaDespesaModal({
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div>
                     <label className="text-xs font-bold text-gray-500 mb-1 block">
-                      Tipo de Lançamento
+                      Tipo
                     </label>
                     <select
                       name="parcelamento"
                       value={formData.parcelamento}
                       onChange={handleChange}
                       className="w-full p-2 border rounded-lg bg-gray-50"
-                      disabled={!!despesaParaEditar}
+                      disabled={!!receitaParaEditar}
                     >
                       <option value="avista">À vista (Único)</option>
-                      <option value="parcelado">
-                        Parcelado (Dividir Valor)
-                      </option>
-                      <option value="recorrente">
-                        Recorrente (Repetir Valor)
-                      </option>
+                      <option value="parcelado">Parcelado</option>
+                      <option value="recorrente">Recorrente</option>
                     </select>
                   </div>
+
                   {(formData.parcelamento === "parcelado" ||
                     formData.parcelamento === "recorrente") &&
-                    !despesaParaEditar && (
+                    !receitaParaEditar && (
                       <>
                         <div className="md:col-span-1">
                           <label className="text-xs font-bold text-gray-500 mb-1 block">
                             {formData.parcelamento === "recorrente"
-                              ? "Repetir por (meses)"
+                              ? "Repetir por"
                               : "Nº Parcelas"}
                           </label>
                           <input
@@ -505,9 +496,7 @@ export default function NovaDespesaModal({
                             </label>
                             <select
                               name="frequencia_recorrencia"
-                              value={
-                                formData.frequencia_recorrencia || "mensal"
-                              }
+                              value={formData.frequencia_recorrencia}
                               onChange={handleChange}
                               className="w-full p-2 border rounded-lg bg-white"
                             >
@@ -520,18 +509,9 @@ export default function NovaDespesaModal({
                       </>
                     )}
 
-                  <div
-                    className={
-                      formData.parcelamento === "recorrente" &&
-                      !despesaParaEditar
-                        ? "md:col-span-1"
-                        : "md:col-span-1"
-                    }
-                  >
+                  <div className="md:col-span-1">
                     <label className="text-xs font-bold text-gray-500 mb-1 block">
-                      {formData.parcelamento !== "avista" && !despesaParaEditar
-                        ? "1º Vencimento *"
-                        : "Vencimento *"}
+                      Vencimento *
                     </label>
                     <input
                       type="date"
@@ -545,7 +525,7 @@ export default function NovaDespesaModal({
 
                   <div className="relative md:col-span-1">
                     <label className="text-xs font-bold text-gray-500 mb-1 block">
-                      Conta de saída
+                      Conta de entrada
                     </label>
                     <select
                       name="conta_id"
@@ -573,7 +553,7 @@ export default function NovaDespesaModal({
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
                   <div>
                     <label className="text-xs font-bold text-gray-500 mb-1 block">
-                      Forma de Pagamento
+                      Forma de Recebimento
                     </label>
                     <select
                       name="forma_pagamento"
@@ -586,7 +566,6 @@ export default function NovaDespesaModal({
                       <option value="transferencia">Transferência</option>
                       <option value="dinheiro">Dinheiro</option>
                       <option value="cartao">Cartão de Crédito</option>
-                      <option value="cartao">Cartão de Débito</option>
                     </select>
                   </div>
 
@@ -597,7 +576,7 @@ export default function NovaDespesaModal({
                         checked={formData.status === "pago"}
                         disabled={
                           formData.parcelamento !== "avista" &&
-                          !despesaParaEditar
+                          !receitaParaEditar
                         }
                         onChange={(e) =>
                           setFormData((prev) => ({
@@ -615,14 +594,15 @@ export default function NovaDespesaModal({
                         }`}
                       >
                         {formData.parcelamento !== "avista" &&
-                        !despesaParaEditar
+                        !receitaParaEditar
                           ? "Lançar como Pendentes"
-                          : "Já está pago?"}
+                          : "Já está recebido?"}
                       </span>
                     </label>
                   </div>
                 </div>
               </section>
+
               <section className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                 <div className="mb-4">
                   <label className="text-xs font-bold text-gray-500 mb-1 block">
@@ -635,6 +615,7 @@ export default function NovaDespesaModal({
                     className="w-full p-2 border rounded-lg h-20 resize-none"
                   />
                 </div>
+
                 {formData.anexo_urls.length > 0 && (
                   <div className="mb-4 space-y-2">
                     <label className="text-xs font-bold text-gray-500 block">
@@ -683,7 +664,7 @@ export default function NovaDespesaModal({
                       </>
                     ) : (
                       <>
-                        <PlusCircle size={24} className="text-blue-500" />
+                        <PlusCircle size={24} className="text-green-500" />
                         <span className="text-xs font-bold mt-1 text-gray-600">
                           Adicionar Anexos (PDF/Imagem)
                         </span>
@@ -711,20 +692,19 @@ export default function NovaDespesaModal({
               Cancelar
             </button>
             <button
-              form="form-despesa"
+              form="form-receita"
               disabled={loading || uploadingFile}
               className="px-6 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700 flex items-center gap-2 text-sm shadow-md"
             >
-              {loading ? "Salvando..." : "Salvar Despesa"}
+              {loading ? "Salvando..." : "Salvar Receita"}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Modais Aninhados */}
-      {showSupplierModal && (
+      {showClientModal && (
         <NovoFornecedorModal
-          onClose={() => setShowSupplierModal(false)}
+          onClose={() => setShowClientModal(false)}
           onSuccess={() => fetchData()}
         />
       )}

@@ -9,6 +9,7 @@ import {
   PieChart,
 } from "lucide-react";
 import ContasPagar from "./financeiro/ContasPagar";
+import ContasReceber from "./financeiro/ContasReceber"; // 1. IMPORTADO
 
 export default function AdminFinanceiro() {
   const [activeTab, setActiveTab] = useState("pagar");
@@ -70,11 +71,10 @@ export default function AdminFinanceiro() {
 
         <div className="bg-white rounded-3xl shadow-lg border border-beige min-h-[500px]">
           {activeTab === "pagar" && <ContasPagar />}
-          {activeTab === "receber" && (
-            <div className="p-10 text-center text-gray-400">
-              Módulo Contas a Receber (Em desenvolvimento)
-            </div>
-          )}
+
+          {/* 2. RENDERIZADO AQUI */}
+          {activeTab === "receber" && <ContasReceber />}
+
           {activeTab === "orcamentos" && (
             <div className="p-10 text-center text-gray-400">
               Módulo Orçamentos (Em desenvolvimento)
