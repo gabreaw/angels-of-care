@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import NovaDespesaModal from "../../components/financeiro/NovaDespesaModal";
+import InformarPagamentoModal from "../../components/financeiro/InformarPagamentoModal";
 
 import {
   Plus,
@@ -33,6 +34,8 @@ export default function ContasPagar() {
     pago: 0,
     total: 0,
   });
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentItem, setPaymentItem] = useState(null);
 
   useEffect(() => {
     fetchTransacoes();
@@ -48,8 +51,7 @@ export default function ContasPagar() {
       .from("financeiro_transacoes")
       .select(`*, financeiro_categorias (nome), financeiro_entidades (nome)`)
       .eq("tipo", "despesa")
-      .order("data_vencimento", { ascending: true });
-
+      .order("data_competencia", { ascending: true });
     if (error) console.error(error);
     else {
       setTransacoes(data || []);
@@ -162,17 +164,32 @@ export default function ContasPagar() {
 
   const handleToggleStatus = async (item, e) => {
     e.stopPropagation();
-    const novoStatus = item.status === "pago" ? "pendente" : "pago";
-    const dataPagamento =
-      novoStatus === "pago" ? new Date().toISOString() : null;
+    if (item.status === "pago") {
+      if (
+        !window.confirm(
+          "Deseja reabrir esta conta? O pagamento será estornado."
+        )
+      )
+        return;
 
-    const { error } = await supabase
-      .from("financeiro_transacoes")
-      .update({ status: novoStatus, data_pagamento: dataPagamento })
-      .eq("id", item.id);
+      const { error } = await supabase
+        .from("financeiro_transacoes")
+        .update({
+          status: "pendente",
+          data_pagamento: null,
+          valor_pago: null,
+          juros: 0,
+          multa: 0,
+          desconto: 0,
+        })
+        .eq("id", item.id);
 
-    if (error) alert("Erro ao atualizar status: " + error.message);
-    else fetchTransacoes();
+      if (error) alert("Erro: " + error.message);
+      else fetchTransacoes();
+    } else {
+      setPaymentItem(item);
+      setShowPaymentModal(true);
+    }
   };
 
   const toggleRow = (id) => {
@@ -426,8 +443,6 @@ export default function ContasPagar() {
                           </div>
                         </td>
                       </tr>
-
-                      {/* DETALHES (EXPANSÃO) */}
                       {expandedRows[item.id] && (
                         <tr className="bg-gray-50 border-b border-gray-200">
                           <td colSpan="7" className="p-4 px-8">
@@ -503,6 +518,16 @@ export default function ContasPagar() {
           onSuccess={() => {
             fetchTransacoes();
           }}
+        />
+      )}
+      {showPaymentModal && paymentItem && (
+        <InformarPagamentoModal
+          transacao={paymentItem}
+          onClose={() => {
+            setShowPaymentModal(false);
+            setPaymentItem(null);
+          }}
+          onSuccess={() => fetchTransacoes()}
         />
       )}
     </div>

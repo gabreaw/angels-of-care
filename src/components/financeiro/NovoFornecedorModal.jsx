@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
-import { X, Save } from "lucide-react";
+import { X, Save, Search, Loader2 } from "lucide-react";
 
 export default function NovoFornecedorModal({
   onClose,
@@ -8,6 +8,8 @@ export default function NovoFornecedorModal({
   fornecedorParaEditar = null,
 }) {
   const [loading, setLoading] = useState(false);
+  const [loadingCep, setLoadingCep] = useState(false);
+
   const [formData, setFormData] = useState({
     tipo_pessoa: "juridica",
     cpf_cnpj: "",
@@ -22,15 +24,16 @@ export default function NovoFornecedorModal({
     bairro: "",
     cidade: "",
     estado: "",
+    complemento: "",
     observacoes: "",
     indicador_ie: "nao_contribuinte",
     inscricao_estadual: "",
     inscricao_municipal: "",
     inscricao_suframa: "",
     optante_simples: false,
+    rg: "",
   });
 
-  // Load data if editing
   useEffect(() => {
     if (fornecedorParaEditar) {
       setFormData({
@@ -47,21 +50,72 @@ export default function NovoFornecedorModal({
         bairro: fornecedorParaEditar.bairro || "",
         cidade: fornecedorParaEditar.cidade || "",
         estado: fornecedorParaEditar.estado || "",
+        complemento: fornecedorParaEditar.complemento || "",
         observacoes: fornecedorParaEditar.observacoes || "",
         indicador_ie: fornecedorParaEditar.indicador_ie || "nao_contribuinte",
         inscricao_estadual: fornecedorParaEditar.inscricao_estadual || "",
         inscricao_municipal: fornecedorParaEditar.inscricao_municipal || "",
         inscricao_suframa: fornecedorParaEditar.inscricao_suframa || "",
         optante_simples: fornecedorParaEditar.optante_simples || false,
+        rg: fornecedorParaEditar.rg || "",
       });
     }
   }, [fornecedorParaEditar]);
 
+  // --- MÁSCARAS ---
+  const applyMask = (name, value) => {
+    // Remove tudo que não é dígito
+    let cleanValue = value.replace(/\D/g, "");
+
+    if (name === "cpf_cnpj") {
+      if (formData.tipo_pessoa === "fisica") {
+        // CPF: 000.000.000-00
+        return cleanValue
+          .replace(/(\d{3})(\d)/, "$1.$2")
+          .replace(/(\d{3})(\d)/, "$1.$2")
+          .replace(/(\d{3})(\d{1,2})/, "$1-$2")
+          .replace(/(-\d{2})\d+?$/, "$1");
+      } else {
+        // CNPJ: 00.000.000/0000-00
+        return cleanValue
+          .replace(/(\d{2})(\d)/, "$1.$2")
+          .replace(/(\d{3})(\d)/, "$1.$2")
+          .replace(/(\d{3})(\d)/, "$1/$2")
+          .replace(/(\d{4})(\d)/, "$1-$2")
+          .replace(/(-\d{2})\d+?$/, "$1");
+      }
+    }
+
+    if (name === "telefone_celular") {
+      // (00) 00000-0000
+      return cleanValue
+        .replace(/(\d{2})(\d)/, "($1) $2")
+        .replace(/(\d{5})(\d)/, "$1-$2")
+        .replace(/(-\d{4})\d+?$/, "$1");
+    }
+
+    if (name === "cep") {
+      // 00000-000
+      return cleanValue
+        .replace(/(\d{5})(\d)/, "$1-$2")
+        .replace(/(-\d{3})\d+?$/, "$1");
+    }
+
+    return value;
+  };
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    let newValue = type === "checkbox" ? checked : value;
+
+    // Aplica máscaras se necessário
+    if (["cpf_cnpj", "telefone_celular", "cep"].includes(name)) {
+      newValue = applyMask(name, value);
+    }
+
     setFormData((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : value,
+      [name]: newValue,
     }));
   };
 
@@ -69,40 +123,35 @@ export default function NovoFornecedorModal({
     setFormData((prev) => ({ ...prev, optante_simples: valor }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+  // --- BUSCA CEP ---
+  const handleBlurCep = async () => {
+    const cepLimpo = formData.cep.replace(/\D/g, "");
+    if (cepLimpo.length !== 8) return;
+
+    setLoadingCep(true);
     try {
-      const payload = { ...formData, tipo_relacao: "fornecedor" };
+      const response = await fetch(
+        `https://brasilapi.com.br/api/cep/v2/${cepLimpo}`
+      );
+      if (!response.ok) throw new Error("CEP não encontrado.");
+      const data = await response.json();
 
-      if (fornecedorParaEditar) {
-        // UPDATE Logic
-        const { error } = await supabase
-          .from("financeiro_entidades")
-          .update(payload)
-          .eq("id", fornecedorParaEditar.id);
-
-        if (error) throw error;
-        alert("Fornecedor atualizado com sucesso!");
-      } else {
-        // INSERT Logic
-        const { error } = await supabase
-          .from("financeiro_entidades")
-          .insert([payload]);
-
-        if (error) throw error;
-        alert("Cadastro realizado com sucesso!");
-      }
-
-      onSuccess();
-      onClose();
+      setFormData((prev) => ({
+        ...prev,
+        endereco: data.street || prev.endereco,
+        bairro: data.neighborhood || prev.bairro,
+        cidade: data.city || prev.cidade,
+        estado: data.state || prev.estado,
+      }));
     } catch (error) {
-      alert("Erro ao salvar: " + error.message);
+      console.warn("Erro ao buscar CEP:", error);
+      // Não alertamos para não ser intrusivo, apenas não preenche
     } finally {
-      setLoading(false);
+      setLoadingCep(false);
     }
   };
 
+  // --- BUSCA CNPJ ---
   const handleBuscarCNPJ = async () => {
     const cnpjLimpo = formData.cpf_cnpj.replace(/\D/g, "");
     if (cnpjLimpo.length !== 14) {
@@ -121,18 +170,52 @@ export default function NovoFornecedorModal({
         ...prev,
         nome: data.razao_social,
         nome_fantasia: data.nome_fantasia || data.razao_social,
-        cep: data.cep,
+        cep: applyMask("cep", data.cep), // Aplica máscara no CEP vindo da API
         endereco: data.logradouro,
         numero: data.numero,
         bairro: data.bairro,
         cidade: data.municipio,
         estado: data.uf,
+        complemento: data.complemento || "",
         email: data.email || "",
-        telefone_celular: data.ddd_telefone_1 || "",
+        telefone_celular: applyMask(
+          "telefone_celular",
+          data.ddd_telefone_1 || ""
+        ),
         optante_simples: data.opcao_pelo_simples || false,
       }));
     } catch (error) {
       alert("Erro ao buscar CNPJ: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const payload = { ...formData, tipo_relacao: "fornecedor" };
+
+      if (fornecedorParaEditar) {
+        const { error } = await supabase
+          .from("financeiro_entidades")
+          .update(payload)
+          .eq("id", fornecedorParaEditar.id);
+        if (error) throw error;
+        alert("Fornecedor atualizado com sucesso!");
+      } else {
+        const { error } = await supabase
+          .from("financeiro_entidades")
+          .insert([payload]);
+        if (error) throw error;
+        alert("Cadastro realizado com sucesso!");
+      }
+
+      onSuccess();
+      onClose();
+    } catch (error) {
+      alert("Erro ao salvar: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -187,14 +270,19 @@ export default function NovoFornecedorModal({
                       value={formData.cpf_cnpj}
                       onChange={handleChange}
                       className="w-full p-2 border rounded"
-                      placeholder="Apenas números"
+                      placeholder={
+                        formData.tipo_pessoa === "fisica"
+                          ? "000.000.000-00"
+                          : "00.000.000/0000-00"
+                      }
                     />
                     <button
                       type="button"
                       onClick={handleBuscarCNPJ}
-                      className="px-3 bg-blue-50 text-blue-600 text-xs font-bold rounded border border-blue-200 hover:bg-blue-100"
+                      className="px-3 bg-blue-50 text-blue-600 text-xs font-bold rounded border border-blue-200 hover:bg-blue-100 flex items-center"
+                      title="Buscar CNPJ na Receita"
                     >
-                      Buscar
+                      <Search size={16} />
                     </button>
                   </div>
                 </div>
@@ -210,17 +298,34 @@ export default function NovoFornecedorModal({
                     required
                   />
                 </div>
-                <div className="md:col-span-3">
-                  <label className="text-xs font-bold text-gray-500 block mb-1">
-                    Razão Social / Nome *
-                  </label>
-                  <input
-                    name="nome"
-                    value={formData.nome}
-                    onChange={handleChange}
-                    className="w-full p-2 border rounded"
-                    required
-                  />
+
+                <div className="md:col-span-3 flex gap-4">
+                  <div className="flex-1">
+                    <label className="text-xs font-bold text-gray-500 block mb-1">
+                      Razão Social / Nome *
+                    </label>
+                    <input
+                      name="nome"
+                      value={formData.nome}
+                      onChange={handleChange}
+                      className="w-full p-2 border rounded"
+                      required
+                    />
+                  </div>
+
+                  {formData.tipo_pessoa === "fisica" && (
+                    <div className="w-40">
+                      <label className="text-xs font-bold text-gray-500 block mb-1">
+                        RG
+                      </label>
+                      <input
+                        name="rg"
+                        value={formData.rg || ""}
+                        onChange={handleChange}
+                        className="w-full p-2 border rounded"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -229,7 +334,6 @@ export default function NovoFornecedorModal({
             <div className="bg-white p-6 rounded-xl border border-gray-200">
               <div className="flex justify-between items-center mb-4 border-b pb-2">
                 <h3 className="font-bold text-gray-700">Informações Fiscais</h3>
-
                 <div className="flex items-center gap-4 text-sm">
                   <span className="font-bold text-gray-500 text-xs">
                     Optante pelo Simples?
@@ -273,7 +377,6 @@ export default function NovoFornecedorModal({
                     </option>
                   </select>
                 </div>
-
                 <div className="md:col-span-1">
                   <label className="text-xs font-bold text-gray-500 block mb-1">
                     Inscrição Estadual
@@ -286,7 +389,6 @@ export default function NovoFornecedorModal({
                     disabled={formData.indicador_ie === "nao_contribuinte"}
                   />
                 </div>
-
                 <div className="md:col-span-1">
                   <label className="text-xs font-bold text-gray-500 block mb-1">
                     Inscrição Municipal
@@ -298,7 +400,6 @@ export default function NovoFornecedorModal({
                     className="w-full p-2 border rounded"
                   />
                 </div>
-
                 <div className="md:col-span-1">
                   <label className="text-xs font-bold text-gray-500 block mb-1">
                     Inscrição Suframa
@@ -312,8 +413,6 @@ export default function NovoFornecedorModal({
                 </div>
               </div>
             </div>
-
-            {/* 3. ENDEREÇO */}
             <div className="bg-white p-6 rounded-xl border border-gray-200">
               <h3 className="font-bold text-gray-700 mb-4 border-b pb-2">
                 Endereço
@@ -321,13 +420,18 @@ export default function NovoFornecedorModal({
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <label className="text-xs font-bold text-gray-500 block mb-1">
-                    CEP
+                    CEP{" "}
+                    {loadingCep && (
+                      <Loader2 className="inline animate-spin w-3 h-3 ml-1 text-blue-500" />
+                    )}
                   </label>
                   <input
                     name="cep"
                     value={formData.cep}
                     onChange={handleChange}
+                    onBlur={handleBlurCep} 
                     className="w-full p-2 border rounded"
+                    placeholder="00000-000"
                   />
                 </div>
                 <div className="md:col-span-3">
@@ -385,10 +489,20 @@ export default function NovoFornecedorModal({
                     className="w-full p-2 border rounded"
                   />
                 </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 block mb-1">
+                    Complemento
+                  </label>
+                  <input
+                    name="complemento"
+                    value={formData.complemento}
+                    onChange={handleChange}
+                    className="w-full p-2 border rounded"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* 4. CONTATO E OBSERVAÇÕES */}
             <div className="bg-white p-6 rounded-xl border border-gray-200">
               <h3 className="font-bold text-gray-700 mb-4 border-b pb-2">
                 Contato e Observações
@@ -415,6 +529,7 @@ export default function NovoFornecedorModal({
                     value={formData.telefone_celular}
                     onChange={handleChange}
                     className="w-full p-2 border rounded"
+                    placeholder="(00) 00000-0000"
                   />
                 </div>
               </div>
@@ -446,7 +561,9 @@ export default function NovoFornecedorModal({
             className="px-6 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700 flex items-center gap-2 text-sm shadow-md"
           >
             {loading ? (
-              "Salvando..."
+              <>
+                <Loader2 size={18} className="animate-spin" /> Salvando...
+              </>
             ) : (
               <>
                 <Save size={18} /> Salvar

@@ -75,7 +75,7 @@ export default function NovaDespesaModal({
       setFormData({
         entidade_id: despesaParaEditar.entidade_id || "",
         data_competencia:
-          despesaParaEditar.created_at?.split("T")[0] ||
+          despesaParaEditar.data_competencia ||
           new Date().toISOString().split("T")[0],
         descricao: despesaParaEditar.descricao,
         valor: despesaParaEditar.valor
@@ -124,16 +124,13 @@ export default function NovaDespesaModal({
     if (files.length === 0) return;
 
     setUploadingFile(true);
-    const newUrls = [];
+    const newAttachments = [];
 
     try {
       for (const file of files) {
-        const fileExt = file.name.split(".").pop();
-        const fileName = `${Date.now()}-${Math.random()
-          .toString(36)
-          .substring(2, 15)}.${fileExt}`;
+        const fileExt = file.name.split(".").pop().toLowerCase().trim();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
         const filePath = `private/despesas/${fileName}`;
-
         const { error: uploadError } = await supabase.storage
           .from("financeiro")
           .upload(filePath, file);
@@ -143,14 +140,17 @@ export default function NovaDespesaModal({
         const { data } = supabase.storage
           .from("financeiro")
           .getPublicUrl(filePath);
-
-        newUrls.push(data.publicUrl);
+        newAttachments.push({
+          name: file.name,
+          url: data.publicUrl,
+        });
       }
 
       setFormData((prev) => ({
         ...prev,
-        anexo_urls: [...prev.anexo_urls, ...newUrls],
+        anexo_urls: [...prev.anexo_urls, ...newAttachments],
       }));
+
       alert(`${files.length} arquivo(s) anexado(s) com sucesso!`);
     } catch (error) {
       alert("Erro ao enviar arquivo: " + error.message);
@@ -159,7 +159,6 @@ export default function NovaDespesaModal({
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
-
   const removeAttachment = (indexToRemove) => {
     setFormData((prev) => ({
       ...prev,
@@ -170,7 +169,16 @@ export default function NovaDespesaModal({
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-
+    const anexosPadronizados = formData.anexo_urls.map((item) => {
+      if (typeof item === "string") {
+        const nomeExtraido = decodeURIComponent(
+          item.split("/").pop().split("?")[0]
+        );
+        return { name: nomeExtraido, url: item };
+      }
+      return item;
+    });
+    const anexoUrlString = JSON.stringify(anexosPadronizados);
     const valorTotal = formData.valor
       ? parseFloat(
           String(formData.valor)
@@ -179,12 +187,11 @@ export default function NovaDespesaModal({
         )
       : 0;
 
-    const anexoUrlString = JSON.stringify(formData.anexo_urls);
-
     const payloadBase = {
       tipo: "despesa",
       descricao: formData.descricao,
       status: formData.status,
+      data_competencia: formData.data_competencia,
       categoria_id: formData.categoria_id || null,
       entidade_id: formData.entidade_id || null,
       conta_id: formData.conta_id || null,
@@ -641,32 +648,44 @@ export default function NovaDespesaModal({
                       Arquivos Anexados ({formData.anexo_urls.length})
                     </label>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                      {formData.anexo_urls.map((url, index) => (
-                        <div
-                          key={index}
-                          className="flex items-center justify-between p-2 bg-gray-50 border rounded-lg text-xs"
-                        >
-                          <a
-                            href={url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="flex items-center gap-2 text-blue-600 hover:underline truncate"
+                      {formData.anexo_urls.map((anexo, index) => {
+                        const fileUrl =
+                          typeof anexo === "string" ? anexo : anexo.url;
+                        const fileName =
+                          typeof anexo === "string"
+                            ? decodeURIComponent(
+                                anexo.split("/").pop().split("?")[0]
+                              )
+                            : anexo.name;
+
+                        return (
+                          <div
+                            key={index}
+                            className="flex items-center justify-between p-2 bg-gray-50 border rounded-lg text-xs"
                           >
-                            <Paperclip size={14} /> Anexo {index + 1}
-                          </a>
-                          <button
-                            type="button"
-                            onClick={() => removeAttachment(index)}
-                            className="text-gray-400 hover:text-red-500"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      ))}
+                            <a
+                              href={fileUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-2 text-blue-600 hover:underline truncate max-w-[85%]"
+                              title={fileName}
+                            >
+                              <Paperclip size={14} className="flex-shrink-0" />
+                              <span className="truncate">{fileName}</span>
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => removeAttachment(index)}
+                              className="text-gray-400 hover:text-red-500 flex-shrink-0 ml-2"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
-
                 <div
                   className={`border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50 transition-colors ${
                     uploadingFile ? "opacity-50 pointer-events-none" : ""

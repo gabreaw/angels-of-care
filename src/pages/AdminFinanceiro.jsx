@@ -115,6 +115,24 @@ export default function AdminFinanceiro() {
             label="Contas a Receber"
             color="text-green-600"
           />
+          <TabButton
+            active={activeTab === "orcamentos"}
+            onClick={() => setActiveTab("orcamentos")}
+            icon={FileText}
+            label="Orçamentos"
+          />
+          <TabButton
+            active={activeTab === "contratos"}
+            onClick={() => setActiveTab("contratos")}
+            icon={Briefcase}
+            label="Contratos"
+          />
+          <TabButton
+            active={activeTab === "relatorios"}
+            onClick={() => setActiveTab("relatorios")}
+            icon={PieChart}
+            label="Relatórios"
+          />
         </div>
 
         <div className="bg-white rounded-3xl shadow-lg border border-beige min-h-[500px]">
