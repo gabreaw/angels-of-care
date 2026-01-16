@@ -61,7 +61,6 @@ export default function ContasPagar() {
 
   function applyFilters() {
     let result = transacoes;
-
     if (searchTerm) {
       const lowerTerm = searchTerm.toLowerCase();
       result = result.filter(
