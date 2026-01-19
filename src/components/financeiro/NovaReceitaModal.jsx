@@ -7,13 +7,12 @@ import {
   Paperclip,
   CheckCircle,
   Loader2,
-  Calendar,
   Settings,
   Repeat,
   Trash2,
-  TrendingUp, // Icone diferente para receita
+  TrendingUp,
 } from "lucide-react";
-import NovoFornecedorModal from "./NovoFornecedorModal"; // Usamos o mesmo para criar Clientes
+import NovoFornecedorModal from "./NovoFornecedorModal";
 import GerenciarCategoriasModal from "./GerenciarCategoriasModal";
 import NovaContaModal from "./NovaContaModal";
 
@@ -25,7 +24,6 @@ export default function NovaReceitaModal({
   const [loading, setLoading] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
 
-  // Modais auxiliares
   const [showClientModal, setShowClientModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
@@ -76,15 +74,18 @@ export default function NovaReceitaModal({
 
       setFormData({
         entidade_id: receitaParaEditar.entidade_id || "",
+        // Lógica corrigida da data de competência
         data_competencia:
-          receitaParaEditar.created_at?.split("T")[0] ||
+          receitaParaEditar.data_competencia ||
           new Date().toISOString().split("T")[0],
         descricao: receitaParaEditar.descricao,
-        valor: formatCurrencyInput(receitaParaEditar.valor),
+        valor: receitaParaEditar.valor
+          ? formatCurrencyInput(receitaParaEditar.valor)
+          : "",
         categoria_id: receitaParaEditar.categoria_id || "",
         centro_custo: receitaParaEditar.centro_custo || "",
         codigo_referencia: receitaParaEditar.codigo_referencia || "",
-        parcelamento: "avista", 
+        parcelamento: "avista", // Simplificado na edição
         numero_parcelas: 1,
         frequencia_recorrencia: "mensal",
         data_vencimento: receitaParaEditar.data_vencimento,
@@ -119,19 +120,18 @@ export default function NovaReceitaModal({
     setContas(accRes.data || []);
   }
 
+  // --- LÓGICA DE UPLOAD CORRIGIDA (SALVA NOME + URL) ---
   const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
     setUploadingFile(true);
-    const newUrls = [];
+    const newAttachments = [];
 
     try {
       for (const file of files) {
-        const fileExt = file.name.split(".").pop();
-        const fileName = `receitas/${Date.now()}-${Math.random()
-          .toString(36)
-          .substring(2)}.${fileExt}`;
+        const fileExt = file.name.split(".").pop().toLowerCase().trim();
+        const fileName = `receitas/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
 
         const { error: uploadError } = await supabase.storage
           .from("financeiro")
@@ -141,13 +141,19 @@ export default function NovaReceitaModal({
         const { data } = supabase.storage
           .from("financeiro")
           .getPublicUrl(fileName);
-        newUrls.push(data.publicUrl);
+
+        // SALVA O NOME ORIGINAL AQUI
+        newAttachments.push({
+          name: file.name,
+          url: data.publicUrl,
+        });
       }
 
       setFormData((prev) => ({
         ...prev,
-        anexo_urls: [...prev.anexo_urls, ...newUrls],
+        anexo_urls: [...prev.anexo_urls, ...newAttachments],
       }));
+      alert(`${files.length} arquivo(s) anexado(s)!`);
     } catch (error) {
       alert("Erro ao enviar: " + error.message);
     } finally {
@@ -167,11 +173,23 @@ export default function NovaReceitaModal({
     e.preventDefault();
     setLoading(true);
 
+    // --- PADRONIZAÇÃO ANTES DE SALVAR ---
+    const anexosPadronizados = formData.anexo_urls.map((item) => {
+      if (typeof item === "string") {
+        const nomeExtraido = decodeURIComponent(
+          item.split("/").pop().split("?")[0],
+        );
+        return { name: nomeExtraido, url: item };
+      }
+      return item;
+    });
+    const anexoUrlString = JSON.stringify(anexosPadronizados);
+
     const valorTotal = formData.valor
       ? parseFloat(
           String(formData.valor)
             .replace(/[^\d,]/g, "")
-            .replace(",", ".")
+            .replace(",", "."),
         )
       : 0;
 
@@ -186,7 +204,8 @@ export default function NovaReceitaModal({
       forma_pagamento: formData.forma_pagamento,
       data_pagamento: formData.status === "pago" ? new Date() : null,
       observacoes: formData.observacoes,
-      anexo_url: JSON.stringify(formData.anexo_urls),
+      anexo_url: anexoUrlString, // Salva string JSON
+      data_competencia: formData.data_competencia, // Garante que salva a competência
     };
 
     try {
@@ -204,7 +223,6 @@ export default function NovaReceitaModal({
       } else {
         let lancamentos = [];
 
-        // Lógica de Parcelamento/Recorrência (Idêntica ao Despesa)
         if (
           formData.parcelamento === "parcelado" &&
           formData.numero_parcelas > 1
@@ -215,9 +233,7 @@ export default function NovaReceitaModal({
             dataBase.setMonth(dataBase.getMonth() + i);
             lancamentos.push({
               ...payloadBase,
-              descricao: `${formData.descricao} (${i + 1}/${
-                formData.numero_parcelas
-              })`,
+              descricao: `${formData.descricao} (${i + 1}/${formData.numero_parcelas})`,
               valor: valorParcela,
               data_vencimento: dataBase.toISOString().split("T")[0],
               status: "pendente",
@@ -239,9 +255,7 @@ export default function NovaReceitaModal({
 
             lancamentos.push({
               ...payloadBase,
-              descricao: `${formData.descricao} (Recorrente ${i + 1}/${
-                formData.numero_parcelas
-              })`,
+              descricao: `${formData.descricao} (Recorrente ${i + 1}/${formData.numero_parcelas})`,
               valor: valorTotal,
               data_vencimento: dataBase.toISOString().split("T")[0],
               status: "pendente",
@@ -310,7 +324,11 @@ export default function NovaReceitaModal({
               onSubmit={handleSubmit}
               className="space-y-6"
             >
+              {/* Informações Gerais */}
               <section className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <h3 className="text-sm font-bold text-gray-800 mb-4 border-b pb-2">
+                  Informações do lançamento
+                </h3>
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                   <div className="md:col-span-4 relative">
                     <label className="text-xs font-bold text-gray-500 mb-1 block">
@@ -398,7 +416,6 @@ export default function NovaReceitaModal({
                         </option>
                       ))}
                     </select>
-                    {/* Nota: GerenciarCategoriasModal precisaria de um prop 'tipo' para ser perfeito, mas aqui abre o padrao */}
                     <button
                       type="button"
                       onClick={() => setShowCategoryModal(true)}
@@ -439,6 +456,7 @@ export default function NovaReceitaModal({
                 </div>
               </section>
 
+              {/* Condição de Pagamento */}
               <section className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                 <div className="flex items-center gap-2 mb-4 border-b pb-2">
                   <h3 className="text-sm font-bold text-gray-800">
@@ -587,11 +605,7 @@ export default function NovaReceitaModal({
                         className="w-4 h-4 accent-green-600"
                       />
                       <span
-                        className={`text-sm font-bold ${
-                          formData.status === "pago"
-                            ? "text-green-600"
-                            : "text-gray-500"
-                        }`}
+                        className={`text-sm font-bold ${formData.status === "pago" ? "text-green-600" : "text-gray-500"}`}
                       >
                         {formData.parcelamento !== "avista" &&
                         !receitaParaEditar
@@ -603,6 +617,7 @@ export default function NovaReceitaModal({
                 </div>
               </section>
 
+              {/* Anexos e Observações */}
               <section className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                 <div className="mb-4">
                   <label className="text-xs font-bold text-gray-500 mb-1 block">
@@ -616,42 +631,54 @@ export default function NovaReceitaModal({
                   />
                 </div>
 
+                {/* LISTA DE ANEXOS VISUALMENTE CORRIGIDA */}
                 {formData.anexo_urls.length > 0 && (
                   <div className="mb-4 space-y-2">
                     <label className="text-xs font-bold text-gray-500 block">
                       Arquivos Anexados ({formData.anexo_urls.length})
                     </label>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                      {formData.anexo_urls.map((url, index) => (
-                        <div
-                          key={index}
-                          className="flex items-center justify-between p-2 bg-gray-50 border rounded-lg text-xs"
-                        >
-                          <a
-                            href={url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="flex items-center gap-2 text-blue-600 hover:underline truncate"
+                      {formData.anexo_urls.map((anexo, index) => {
+                        const fileUrl =
+                          typeof anexo === "string" ? anexo : anexo.url;
+                        const fileName =
+                          typeof anexo === "string"
+                            ? decodeURIComponent(
+                                anexo.split("/").pop().split("?")[0],
+                              )
+                            : anexo.name;
+
+                        return (
+                          <div
+                            key={index}
+                            className="flex items-center justify-between p-2 bg-gray-50 border rounded-lg text-xs"
                           >
-                            <Paperclip size={14} /> Anexo {index + 1}
-                          </a>
-                          <button
-                            type="button"
-                            onClick={() => removeAttachment(index)}
-                            className="text-gray-400 hover:text-red-500"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      ))}
+                            <a
+                              href={fileUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-2 text-blue-600 hover:underline truncate max-w-[85%]"
+                              title={fileName}
+                            >
+                              <Paperclip size={14} className="flex-shrink-0" />{" "}
+                              <span className="truncate">{fileName}</span>
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => removeAttachment(index)}
+                              className="text-gray-400 hover:text-red-500 flex-shrink-0 ml-2"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
 
                 <div
-                  className={`border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50 transition-colors ${
-                    uploadingFile ? "opacity-50 pointer-events-none" : ""
-                  }`}
+                  className={`border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50 transition-colors ${uploadingFile ? "opacity-50 pointer-events-none" : ""}`}
                   onClick={() => fileInputRef.current.click()}
                 >
                   <div className="flex flex-col items-center text-gray-400">

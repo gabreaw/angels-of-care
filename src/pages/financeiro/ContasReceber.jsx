@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import NovaReceitaModal from "../../components/financeiro/NovaReceitaModal";
+import InformarRecebimentoModal from "../../components/financeiro/InformarRecebimentoModal"; 
 
 import {
   Plus,
@@ -30,6 +31,9 @@ export default function ContasReceber() {
   const [itemParaEditar, setItemParaEditar] = useState(null);
   const [expandedRows, setExpandedRows] = useState({});
 
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentItem, setPaymentItem] = useState(null);
+
   const [resumo, setResumo] = useState({
     vencidos: 0,
     hoje: 0,
@@ -51,8 +55,8 @@ export default function ContasReceber() {
     const { data, error } = await supabase
       .from("financeiro_transacoes")
       .select(`*, financeiro_categorias (nome), financeiro_entidades (nome)`)
-      .eq("tipo", "receita") 
-      .order("data_vencimento", { ascending: true });
+      .eq("tipo", "receita")
+      .order("data_competencia", { ascending: true });
 
     if (error) console.error(error);
     else {
@@ -70,7 +74,7 @@ export default function ContasReceber() {
         (item) =>
           item.descricao?.toLowerCase().includes(lowerTerm) ||
           item.financeiro_entidades?.nome?.toLowerCase().includes(lowerTerm) ||
-          item.financeiro_categorias?.nome?.toLowerCase().includes(lowerTerm)
+          item.financeiro_categorias?.nome?.toLowerCase().includes(lowerTerm),
       );
     }
 
@@ -131,7 +135,10 @@ export default function ContasReceber() {
   const formatMonthTitle = (dateKey) => {
     const [year, month] = dateKey.split("-");
     const date = new Date(year, month - 1);
-    return date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+    return date.toLocaleDateString("pt-BR", {
+      month: "long",
+      year: "numeric",
+    });
   };
 
   const handleNovaReceita = () => {
@@ -158,17 +165,34 @@ export default function ContasReceber() {
 
   const handleToggleStatus = async (item, e) => {
     e.stopPropagation();
-    const novoStatus = item.status === "pago" ? "pendente" : "pago";
-    const dataPagamento =
-      novoStatus === "pago" ? new Date().toISOString() : null;
 
-    const { error } = await supabase
-      .from("financeiro_transacoes")
-      .update({ status: novoStatus, data_pagamento: dataPagamento })
-      .eq("id", item.id);
+    // LÓGICA ATUALIZADA
+    if (item.status === "pago") {
+      if (
+        !window.confirm(
+          "Deseja reabrir este recebimento? O valor será estornado.",
+        )
+      )
+        return;
 
-    if (error) alert("Erro ao atualizar status: " + error.message);
-    else fetchTransacoes();
+      const { error } = await supabase
+        .from("financeiro_transacoes")
+        .update({
+          status: "pendente",
+          data_pagamento: null,
+          valor_pago: null,
+          juros: 0,
+          multa: 0,
+          desconto: 0,
+        })
+        .eq("id", item.id);
+
+      if (error) alert("Erro: " + error.message);
+      else fetchTransacoes();
+    } else {
+      setPaymentItem(item);
+      setShowPaymentModal(true);
+    }
   };
 
   const toggleRow = (id) => {
@@ -483,6 +507,18 @@ export default function ContasReceber() {
           onSuccess={() => {
             fetchTransacoes();
           }}
+        />
+      )}
+
+      {/* RENDERIZAÇÃO DO MODAL DE RECEBIMENTO */}
+      {showPaymentModal && paymentItem && (
+        <InformarRecebimentoModal
+          transacao={paymentItem}
+          onClose={() => {
+            setShowPaymentModal(false);
+            setPaymentItem(null);
+          }}
+          onSuccess={() => fetchTransacoes()}
         />
       )}
     </div>

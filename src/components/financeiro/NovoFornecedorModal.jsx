@@ -62,21 +62,17 @@ export default function NovoFornecedorModal({
     }
   }, [fornecedorParaEditar]);
 
-  // --- MÁSCARAS ---
   const applyMask = (name, value) => {
-    // Remove tudo que não é dígito
     let cleanValue = value.replace(/\D/g, "");
 
     if (name === "cpf_cnpj") {
       if (formData.tipo_pessoa === "fisica") {
-        // CPF: 000.000.000-00
         return cleanValue
           .replace(/(\d{3})(\d)/, "$1.$2")
           .replace(/(\d{3})(\d)/, "$1.$2")
           .replace(/(\d{3})(\d{1,2})/, "$1-$2")
           .replace(/(-\d{2})\d+?$/, "$1");
       } else {
-        // CNPJ: 00.000.000/0000-00
         return cleanValue
           .replace(/(\d{2})(\d)/, "$1.$2")
           .replace(/(\d{3})(\d)/, "$1.$2")
@@ -87,7 +83,6 @@ export default function NovoFornecedorModal({
     }
 
     if (name === "telefone_celular") {
-      // (00) 00000-0000
       return cleanValue
         .replace(/(\d{2})(\d)/, "($1) $2")
         .replace(/(\d{5})(\d)/, "$1-$2")
@@ -95,7 +90,6 @@ export default function NovoFornecedorModal({
     }
 
     if (name === "cep") {
-      // 00000-000
       return cleanValue
         .replace(/(\d{5})(\d)/, "$1-$2")
         .replace(/(-\d{3})\d+?$/, "$1");
@@ -108,7 +102,6 @@ export default function NovoFornecedorModal({
     const { name, value, type, checked } = e.target;
     let newValue = type === "checkbox" ? checked : value;
 
-    // Aplica máscaras se necessário
     if (["cpf_cnpj", "telefone_celular", "cep"].includes(name)) {
       newValue = applyMask(name, value);
     }
@@ -123,7 +116,6 @@ export default function NovoFornecedorModal({
     setFormData((prev) => ({ ...prev, optante_simples: valor }));
   };
 
-  // --- BUSCA CEP ---
   const handleBlurCep = async () => {
     const cepLimpo = formData.cep.replace(/\D/g, "");
     if (cepLimpo.length !== 8) return;
@@ -131,7 +123,7 @@ export default function NovoFornecedorModal({
     setLoadingCep(true);
     try {
       const response = await fetch(
-        `https://brasilapi.com.br/api/cep/v2/${cepLimpo}`
+        `https://brasilapi.com.br/api/cep/v2/${cepLimpo}`,
       );
       if (!response.ok) throw new Error("CEP não encontrado.");
       const data = await response.json();
@@ -145,13 +137,11 @@ export default function NovoFornecedorModal({
       }));
     } catch (error) {
       console.warn("Erro ao buscar CEP:", error);
-      // Não alertamos para não ser intrusivo, apenas não preenche
     } finally {
       setLoadingCep(false);
     }
   };
 
-  // --- BUSCA CNPJ ---
   const handleBuscarCNPJ = async () => {
     const cnpjLimpo = formData.cpf_cnpj.replace(/\D/g, "");
     if (cnpjLimpo.length !== 14) {
@@ -161,7 +151,7 @@ export default function NovoFornecedorModal({
     setLoading(true);
     try {
       const response = await fetch(
-        `https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`
+        `https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`,
       );
       if (!response.ok) throw new Error("CNPJ não encontrado ou erro na API.");
       const data = await response.json();
@@ -170,7 +160,7 @@ export default function NovoFornecedorModal({
         ...prev,
         nome: data.razao_social,
         nome_fantasia: data.nome_fantasia || data.razao_social,
-        cep: applyMask("cep", data.cep), // Aplica máscara no CEP vindo da API
+        cep: applyMask("cep", data.cep), 
         endereco: data.logradouro,
         numero: data.numero,
         bairro: data.bairro,
@@ -180,7 +170,7 @@ export default function NovoFornecedorModal({
         email: data.email || "",
         telefone_celular: applyMask(
           "telefone_celular",
-          data.ddd_telefone_1 || ""
+          data.ddd_telefone_1 || "",
         ),
         optante_simples: data.opcao_pelo_simples || false,
       }));
@@ -194,7 +184,30 @@ export default function NovoFornecedorModal({
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+
     try {
+      if (formData.cpf_cnpj) {
+        const { data: duplicado, error: erroBusca } = await supabase
+          .from("financeiro_entidades")
+          .select("id")
+          .eq("cpf_cnpj", formData.cpf_cnpj)
+          .maybeSingle(); 
+
+        if (erroBusca) throw erroBusca;
+
+        if (duplicado) {
+          if (
+            !fornecedorParaEditar ||
+            duplicado.id !== fornecedorParaEditar.id
+          ) {
+            alert(
+              "Erro: Já existe um fornecedor cadastrado com este CPF/CNPJ.",
+            );
+            setLoading(false);
+            return;
+          }
+        }
+      }
       const payload = { ...formData, tipo_relacao: "fornecedor" };
 
       if (fornecedorParaEditar) {
@@ -202,12 +215,14 @@ export default function NovoFornecedorModal({
           .from("financeiro_entidades")
           .update(payload)
           .eq("id", fornecedorParaEditar.id);
+
         if (error) throw error;
         alert("Fornecedor atualizado com sucesso!");
       } else {
         const { error } = await supabase
           .from("financeiro_entidades")
           .insert([payload]);
+
         if (error) throw error;
         alert("Cadastro realizado com sucesso!");
       }
@@ -215,7 +230,11 @@ export default function NovoFornecedorModal({
       onSuccess();
       onClose();
     } catch (error) {
-      alert("Erro ao salvar: " + error.message);
+      if (error.code === "23505") {
+        alert("Erro: Este CPF/CNPJ já está em uso.");
+      } else {
+        alert("Erro ao salvar: " + error.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -330,7 +349,6 @@ export default function NovoFornecedorModal({
               </div>
             </div>
 
-            {/* 2. INFORMAÇÕES FISCAIS */}
             <div className="bg-white p-6 rounded-xl border border-gray-200">
               <div className="flex justify-between items-center mb-4 border-b pb-2">
                 <h3 className="font-bold text-gray-700">Informações Fiscais</h3>
@@ -429,7 +447,7 @@ export default function NovoFornecedorModal({
                     name="cep"
                     value={formData.cep}
                     onChange={handleChange}
-                    onBlur={handleBlurCep} 
+                    onBlur={handleBlurCep}
                     className="w-full p-2 border rounded"
                     placeholder="00000-000"
                   />
