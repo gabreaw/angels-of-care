@@ -14,12 +14,13 @@ import {
 } from "lucide-react";
 import ContasPagar from "./financeiro/ContasPagar";
 import ContasReceber from "./financeiro/ContasReceber";
-
+import Orcamentos from "./financeiro/Orcamentos";
 import ListaFornecedoresModal from "../components/financeiro/ListaFornecedoresModal";
 import NovaContaModal from "../components/financeiro/NovaContaModal";
 import GerenciarCategoriasModal from "../components/financeiro/GerenciarCategoriasModal";
 import ListaContasModal from "../components/financeiro/ListaContasModal";
-
+import Relatorios from "./financeiro/Relatorios";
+import Contratos from "./financeiro/Contratos";
 export default function AdminFinanceiro() {
   const [activeTab, setActiveTab] = useState("pagar");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -138,13 +139,9 @@ export default function AdminFinanceiro() {
         <div className="bg-white rounded-3xl shadow-lg border border-beige min-h-[500px]">
           {activeTab === "pagar" && <ContasPagar />}
           {activeTab === "receber" && <ContasReceber />}
-          {(activeTab === "orcamentos" ||
-            activeTab === "contratos" ||
-            activeTab === "relatorios") && (
-            <div className="p-10 text-center text-gray-400 flex flex-col items-center justify-center h-[400px]">
-              Módulo em desenvolvimento.
-            </div>
-          )}
+          {activeTab === "orcamentos" && <Orcamentos />}
+          {activeTab === "relatorios" && <Relatorios />}
+          {activeTab === "contratos" && <Contratos />}
         </div>
       </div>
 

@@ -11,7 +11,7 @@ import {
   Settings,
   Repeat,
   Trash2,
-  AlertTriangle, // Ícone para o aviso de recorrência
+  AlertTriangle,
 } from "lucide-react";
 import NovoFornecedorModal from "./NovoFornecedorModal";
 import GerenciarCategoriasModal from "./GerenciarCategoriasModal";
@@ -25,12 +25,10 @@ export default function NovaDespesaModal({
   const [loading, setLoading] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
 
-  // Modais auxiliares
   const [showSupplierModal, setShowSupplierModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
 
-  // Modal de confirmação de recorrência
   const [showRecorrenciaOptions, setShowRecorrenciaOptions] = useState(false);
 
   const fileInputRef = useRef(null);
@@ -55,7 +53,7 @@ export default function NovaDespesaModal({
     conta_id: "",
     status: "pendente",
     observacoes: "",
-    anexo_urls: [], // Array de objetos {name, url}
+    anexo_urls: [],
   });
 
   useEffect(() => {
@@ -68,7 +66,6 @@ export default function NovaDespesaModal({
           if (despesaParaEditar.anexo_url.trim().startsWith("[")) {
             existingUrls = JSON.parse(despesaParaEditar.anexo_url);
           } else {
-            // Compatibilidade com arquivos antigos (string única)
             existingUrls = [despesaParaEditar.anexo_url];
           }
         }
@@ -90,7 +87,6 @@ export default function NovaDespesaModal({
         categoria_id: despesaParaEditar.categoria_id || "",
         centro_custo: despesaParaEditar.centro_custo || "",
         codigo_referencia: despesaParaEditar.codigo_referencia || "",
-        // Se tem recorrencia_id, tratamos como recorrente na lógica, mas visualmente pode mostrar o tipo original
         parcelamento: despesaParaEditar.recorrencia_id
           ? "recorrente"
           : "avista",
@@ -151,7 +147,6 @@ export default function NovaDespesaModal({
           .from("financeiro")
           .getPublicUrl(filePath);
 
-        // Salva objeto com NOME e URL
         newAttachments.push({
           name: file.name,
           url: data.publicUrl,
@@ -179,7 +174,6 @@ export default function NovaDespesaModal({
     }));
   };
 
-  // Intercepta o submit para verificar recorrência
   const handlePreSubmit = (e) => {
     e.preventDefault();
     if (despesaParaEditar && despesaParaEditar.recorrencia_id) {
@@ -192,7 +186,6 @@ export default function NovaDespesaModal({
   const handleSubmit = async (modoEdicao = "unico") => {
     setLoading(true);
 
-    // Padroniza anexos para salvar nomes corretamente
     const anexosPadronizados = formData.anexo_urls.map((item) => {
       if (typeof item === "string") {
         const nomeExtraido = decodeURIComponent(
@@ -229,7 +222,6 @@ export default function NovaDespesaModal({
 
     try {
       if (despesaParaEditar) {
-        // --- CENÁRIO: ATUALIZAR APENAS UM ---
         if (modoEdicao === "unico") {
           const { error } = await supabase
             .from("financeiro_transacoes")
@@ -241,10 +233,7 @@ export default function NovaDespesaModal({
             .eq("id", despesaParaEditar.id);
 
           if (error) throw error;
-
-          // --- CENÁRIO: ATUALIZAR ESTE E FUTUROS ---
         } else if (modoEdicao === "futuros") {
-          // 1. Atualiza o atual
           await supabase
             .from("financeiro_transacoes")
             .update({
@@ -253,27 +242,22 @@ export default function NovaDespesaModal({
               data_vencimento: formData.data_vencimento,
             })
             .eq("id", despesaParaEditar.id);
-
-          // 2. Atualiza os próximos da mesma série (pelo recorrencia_id)
-          // Nota: Não alteramos a data de vencimento dos próximos para não bagunçar os meses
           const { error } = await supabase
             .from("financeiro_transacoes")
             .update({
-              ...payloadBase, // Atualiza desc, categoria, obs, anexos
-              valor: valorTotal, // Atualiza valor
+              ...payloadBase,
+              valor: valorTotal,
             })
             .eq("recorrencia_id", despesaParaEditar.recorrencia_id)
-            .gt("data_vencimento", despesaParaEditar.data_vencimento) // Apenas datas futuras
-            .neq("status", "pago"); // Opcional: não mexe no que já foi pago
+            .gt("data_vencimento", despesaParaEditar.data_vencimento)
+            .neq("status", "pago");
 
           if (error) throw error;
         }
 
         alert("Despesa atualizada!");
       } else {
-        // --- CRIAÇÃO ---
         let lancamentos = [];
-        // Gera um ID para vincular as parcelas
         const recorrenciaId = crypto.randomUUID();
 
         if (
@@ -282,15 +266,21 @@ export default function NovaDespesaModal({
         ) {
           const valorParcela = valorTotal / formData.numero_parcelas;
           for (let i = 0; i < formData.numero_parcelas; i++) {
-            const dataBase = new Date(formData.data_vencimento);
-            dataBase.setMonth(dataBase.getMonth() + i);
+            const dataVenc = new Date(formData.data_vencimento);
+            dataVenc.setMonth(dataVenc.getMonth() + i);
+            const vencimentoISO = dataVenc.toISOString().split("T")[0];
+
+            const dataComp = new Date(formData.data_competencia);
+            dataComp.setMonth(dataComp.getMonth() + i);
+            const competenciaISO = dataComp.toISOString().split("T")[0];
 
             lancamentos.push({
               ...payloadBase,
-              recorrencia_id: recorrenciaId, // Vínculo
+              recorrencia_id: recorrenciaId,
               descricao: `${formData.descricao} (${i + 1}/${formData.numero_parcelas})`,
               valor: valorParcela,
-              data_vencimento: dataBase.toISOString().split("T")[0],
+              data_vencimento: vencimentoISO,
+              data_competencia: competenciaISO,
               status: "pendente",
               parcela_atual: i + 1,
               parcelas_total: formData.numero_parcelas,
@@ -301,19 +291,27 @@ export default function NovaDespesaModal({
           formData.numero_parcelas > 1
         ) {
           for (let i = 0; i < formData.numero_parcelas; i++) {
-            const dataBase = new Date(formData.data_vencimento);
-            if (formData.frequencia_recorrencia === "semanal")
-              dataBase.setDate(dataBase.getDate() + i * 7);
-            else if (formData.frequencia_recorrencia === "anual")
-              dataBase.setFullYear(dataBase.getFullYear() + i);
-            else dataBase.setMonth(dataBase.getMonth() + i);
+            const dataVenc = new Date(formData.data_vencimento);
+            const dataComp = new Date(formData.data_competencia);
+
+            if (formData.frequencia_recorrencia === "semanal") {
+              dataVenc.setDate(dataVenc.getDate() + i * 7);
+              dataComp.setDate(dataComp.getDate() + i * 7);
+            } else if (formData.frequencia_recorrencia === "anual") {
+              dataVenc.setFullYear(dataVenc.getFullYear() + i);
+              dataComp.setFullYear(dataComp.getFullYear() + i);
+            } else {
+              dataVenc.setMonth(dataVenc.getMonth() + i);
+              dataComp.setMonth(dataComp.getMonth() + i);
+            }
 
             lancamentos.push({
               ...payloadBase,
-              recorrencia_id: recorrenciaId, // Vínculo
+              recorrencia_id: recorrenciaId,
               descricao: `${formData.descricao} (Recorrente ${i + 1}/${formData.numero_parcelas})`,
               valor: valorTotal,
-              data_vencimento: dataBase.toISOString().split("T")[0],
+              data_vencimento: dataVenc.toISOString().split("T")[0],
+              data_competencia: dataComp.toISOString().split("T")[0],
               status: "pendente",
               parcela_atual: i + 1,
               parcelas_total: formData.numero_parcelas,

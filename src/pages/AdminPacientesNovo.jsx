@@ -16,23 +16,18 @@ export default function AdminPacientesNovo() {
   const [loadingCep, setLoadingCep] = useState(false);
 
   const [formData, setFormData] = useState({
-    // Paciente
     nome_paciente: "",
     data_nascimento: "",
     cpf_paciente: "",
     sexo: "Feminino",
 
-    // Clínico
-    diagnostico: "", // Ex: Alzheimer
-    grau_dependencia: "Grau 1", // 1, 2 ou 3 (ANS)
-    cuidados_especificos: "", // Ex: Uso de fralda, sonda, acamado
+    diagnostico: "", 
+    grau_dependencia: "Grau 1",
+    cuidados_especificos: "", 
 
-    // Responsável (Contato)
     nome_responsavel: "",
     telefone_responsavel: "",
     parentesco: "",
-
-    // Endereço (Onde o serviço acontece)
     cep: "",
     logradouro: "",
     numero: "",
@@ -42,7 +37,6 @@ export default function AdminPacientesNovo() {
     complemento: "",
   });
 
-  // --- MÁSCARAS ---
   const mascaraCPF = (v) =>
     v
       .replace(/\D/g, "")

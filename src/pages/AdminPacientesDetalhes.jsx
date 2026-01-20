@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { supabase } from "../lib/supabase";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "../services/supabaseClient";
 import {
   ArrowLeft,
   User,
@@ -26,9 +25,6 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { pacientesService } from "../services/pacientesService";
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export default function AdminPacientesDetalhes() {
   const { id } = useParams();
@@ -76,6 +72,7 @@ export default function AdminPacientesDetalhes() {
     decubito: false,
     higiene: false,
     arquivo_url: null,
+    arquivo_urls: [],
   });
 
   const [expandedMonths, setExpandedMonths] = useState({});
@@ -106,70 +103,27 @@ export default function AdminPacientesDetalhes() {
       minute: "2-digit",
     });
   };
-  // ---------------------
 
   async function fetchTudo() {
     setLoading(true);
+    try {
+      const pac = await pacientesService.fetchPaciente(id);
+      setPaciente(pac);
+      if (pac.email_responsavel) setEmailFamilia(pac.email_responsavel);
 
-    const { data: pac, error: errPac } = await supabase
-      .from("pacientes")
-      .select("*")
-      .eq("id", id)
-      .single();
-    if (errPac) {
-      alert("Erro ao buscar paciente");
+      const related = await pacientesService.fetchAllRelated(id);
+      setHistorico(related.historico);
+      setMedicamentos(related.medicamentos);
+      setSinais(related.sinais);
+      setEvolucoes(related.evolucoes);
+      setPlantoes(related.plantoes);
+      setListaFuncionarios(related.funcionarios);
+    } catch (err) {
+      alert("Erro ao buscar dados: " + err.message);
       navigate("/admin/pacientes");
-      return;
+    } finally {
+      setLoading(false);
     }
-    setPaciente(pac);
-    if (pac.email_responsavel) {
-      setEmailFamilia(pac.email_responsavel);
-    }
-
-    const [histRes, medRes, sinaisRes, evoRes, plantoesRes, funcRes] =
-      await Promise.all([
-        supabase
-          .from("historico_clinico")
-          .select("*")
-          .eq("paciente_id", id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("medicamentos")
-          .select("*")
-          .eq("paciente_id", id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("sinais_vitais")
-          .select("*")
-          .eq("paciente_id", id)
-          .order("data_afericao", { ascending: false })
-          .limit(20),
-        supabase
-          .from("evolucoes")
-          .select("*")
-          .eq("paciente_id", id)
-          .order("data_registro", { ascending: false })
-          .limit(100),
-        supabase
-          .from("plantoes")
-          .select("*, funcionarios(nome_completo)")
-          .eq("paciente_id", id)
-          .order("data_plantao", { ascending: true }),
-        supabase
-          .from("funcionarios")
-          .select("id, nome_completo")
-          .eq("status", "ativo")
-          .order("nome_completo"),
-      ]);
-
-    setHistorico(histRes.data || []);
-    setMedicamentos(medRes.data || []);
-    setSinais(sinaisRes.data || []);
-    setEvolucoes(evoRes.data || []);
-    setPlantoes(plantoesRes.data || []);
-    setListaFuncionarios(funcRes.data || []);
-
-    setLoading(false);
   }
 
   const evolucoesPorMes = evolucoes.reduce((acc, evo) => {
@@ -273,6 +227,7 @@ export default function AdminPacientesDetalhes() {
       ),
     }));
   };
+
   const handleFileUpload = async (e) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -283,24 +238,8 @@ export default function AdminPacientesDetalhes() {
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const fileExt = file.name.split(".").pop();
-        const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
-        const filePath = `${id}/${fileName}`;
-
-        if (fileInput && fileInput.files[0]) {
-          finalUrl = await pacientesService.uploadEvolucaoArquivo(
-            id,
-            fileInput.files[0],
-          );
-        }
-
-        if (editingId) {
-          await pacientesService.updateEvolucao(editingId, payload);
-          alert("Evolução atualizada com sucesso!");
-        } else {
-          await pacientesService.createEvolucao(payload);
-          alert("Evolução registrada com sucesso!");
-        }
+        const url = await pacientesService.uploadEvolucaoArquivo(id, file);
+        if (url) newUrls.push(url);
       }
 
       setEvolucaoForm((prev) => ({
@@ -314,6 +253,7 @@ export default function AdminPacientesDetalhes() {
       e.target.value = "";
     }
   };
+
   const cancelarEdicaoEvolucao = () => {
     setEditingEvolucaoId(null);
     setEvolucaoForm({
@@ -331,6 +271,7 @@ export default function AdminPacientesDetalhes() {
       decubito: false,
       higiene: false,
       arquivo_url: null,
+      arquivo_urls: [],
     });
   };
 
@@ -352,28 +293,7 @@ export default function AdminPacientesDetalhes() {
         ? funcionarioSelecionado.nome_completo
         : "Admin/Desconhecido";
 
-      const fileInput = e.target.anexo;
       const finalUrls = evolucaoForm.arquivo_urls || [];
-      const arquivoUrlLegacy = finalUrls.length > 0 ? finalUrls[0] : null;
-
-      if (fileInput && fileInput.files[0]) {
-        const file = fileInput.files[0];
-        const fileExt = file.name.split(".").pop();
-        const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
-        const filePath = `${id}/${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from("evolucoes")
-          .upload(filePath, file);
-
-        if (uploadError) throw uploadError;
-
-        const { data: urlData } = supabase.storage
-          .from("evolucoes")
-          .getPublicUrl(filePath);
-
-        finalUrl = urlData.publicUrl;
-      }
 
       const payload = {
         paciente_id: id,
@@ -390,45 +310,31 @@ export default function AdminPacientesDetalhes() {
         arquivo_urls: finalUrls,
       };
 
-      let data, error;
-
       if (editingEvolucaoId) {
-        const res = await supabase
-          .from("evolucoes")
-          .update(payload)
-          .eq("id", editingEvolucaoId)
-          .select();
-        data = res.data;
-        error = res.error;
+        const updated = await pacientesService.updateEvolucao(
+          editingEvolucaoId,
+          payload,
+        );
+        setEvolucoes(
+          evolucoes.map((evo) =>
+            evo.id === editingEvolucaoId ? updated : evo,
+          ),
+        );
+        alert("Evolução atualizada!");
       } else {
-        const res = await supabase.from("evolucoes").insert([payload]).select();
-        data = res.data;
-        error = res.error;
+        const created = await pacientesService.createEvolucao(payload);
+        setEvolucoes([created, ...evolucoes]);
+        alert("Evolução criada!");
       }
-
-      if (error) {
-        alert("Erro: " + error.message);
-      } else if (data) {
-        if (editingEvolucaoId) {
-          setEvolucoes(
-            evolucoes.map((evo) =>
-              evo.id === editingEvolucaoId ? data[0] : evo,
-            ),
-          );
-          alert("Evolução atualizada!");
-        } else {
-          setEvolucoes([data[0], ...evolucoes]);
-          alert("Evolução criada!");
-        }
-        cancelarEdicaoEvolucao();
-        e.target.reset();
-      }
+      cancelarEdicaoEvolucao();
+      e.target.reset();
     } catch (err) {
       alert("Erro no processo: " + err.message);
     } finally {
       setUploading(false);
     }
   };
+
   const handlePlantaoChange = (e) => {
     const { name, value, type, checked } = e.target;
     setPlantaoForm((prev) => ({
@@ -436,6 +342,7 @@ export default function AdminPacientesDetalhes() {
       [name]: type === "checkbox" ? checked : value,
     }));
   };
+
   const handleSalvarPlantao = async (e) => {
     e.preventDefault();
 
@@ -450,45 +357,26 @@ export default function AdminPacientesDetalhes() {
       is_extra: plantaoForm.extra,
     };
 
-    if (editingPlantaoId) delete payload.status;
-
-    let data, error;
-
-    if (editingPlantaoId) {
-      const res = await supabase
-        .from("plantoes")
-        .update(payload)
-        .eq("id", editingPlantaoId)
-        .select("*, funcionarios(nome_completo)");
-      data = res.data;
-      error = res.error;
-    } else {
-      const res = await supabase
-        .from("plantoes")
-        .insert([payload])
-        .select("*, funcionarios(nome_completo)");
-      data = res.data;
-      error = res.error;
-    }
-
-    if (error) {
-      alert("Erro ao salvar plantão: " + error.message);
-    } else {
+    try {
+      let res;
       if (editingPlantaoId) {
-        setPlantoes(
-          plantoes.map((p) => (p.id === editingPlantaoId ? data[0] : p)),
-        );
+        res = await pacientesService.updatePlantao(editingPlantaoId, payload);
+        setPlantoes(plantoes.map((p) => (p.id === editingPlantaoId ? res : p)));
         alert("Escala atualizada!");
       } else {
-        const novaLista = [...plantoes, data[0]].sort(
+        res = await pacientesService.createPlantao(payload);
+        const novaLista = [...plantoes, res].sort(
           (a, b) => new Date(a.data_plantao) - new Date(b.data_plantao),
         );
         setPlantoes(novaLista);
         alert("Plantão agendado!");
       }
       cancelarEdicaoPlantao();
+    } catch (err) {
+      alert("Erro ao salvar plantão: " + err.message);
     }
   };
+
   const iniciarEdicaoPlantao = (plantao) => {
     setPlantaoForm({
       funcionario: plantao.funcionario_id,
@@ -513,6 +401,7 @@ export default function AdminPacientesDetalhes() {
       extra: false,
     });
   };
+
   const handleCriarAcesso = async (e) => {
     e.preventDefault();
     if (novaSenha.length < 6) {
@@ -522,13 +411,10 @@ export default function AdminPacientesDetalhes() {
     setCriandoAcesso(true);
 
     try {
-      const tempSupabase = createClient(supabaseUrl, supabaseKey);
-
-      const { data: authData, error: authError } =
-        await tempSupabase.auth.signUp({
-          email: emailFamilia,
-          password: novaSenha,
-        });
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: emailFamilia,
+        password: novaSenha,
+      });
 
       if (authError) {
         if (authError.message.includes("already registered")) {
@@ -540,22 +426,17 @@ export default function AdminPacientesDetalhes() {
 
       let userUuid = authData.user?.id;
 
-      if (!userUuid && authError?.message.includes("already registered")) {
+      if (!userUuid && authError?.message?.includes("already registered")) {
         throw new Error(
           "Email já cadastrado! Por segurança, exclua o usuário no menu Authentication para recriar, ou use outro email.",
         );
       }
 
       if (userUuid) {
-        const { error: updateError } = await supabase
-          .from("pacientes")
-          .update({
-            auth_id: userUuid,
-            email_responsavel: emailFamilia,
-          })
-          .eq("id", id);
-
-        if (updateError) throw updateError;
+        await pacientesService.updatePaciente(id, {
+          auth_id: userUuid,
+          email_responsavel: emailFamilia,
+        });
 
         setPaciente((prev) => ({
           ...prev,
@@ -590,16 +471,12 @@ export default function AdminPacientesDetalhes() {
       telefone_responsavel: form.telefone.value,
     };
 
-    const { error } = await supabase
-      .from("pacientes")
-      .update(updates)
-      .eq("id", id);
-
-    if (error) {
-      alert("Erro ao atualizar: " + error.message);
-    } else {
+    try {
+      const updated = await pacientesService.updatePaciente(id, updates);
       setPaciente({ ...paciente, ...updates });
       setEditModalOpen(false);
+    } catch (err) {
+      alert("Erro ao atualizar: " + err.message);
     }
   };
 
@@ -612,13 +489,13 @@ export default function AdminPacientesDetalhes() {
       descricao: form.descricao.value,
       observacoes: form.observacoes.value,
     };
-    const { data } = await supabase
-      .from("historico_clinico")
-      .insert([novo])
-      .select();
-    if (data) {
-      setHistorico([data[0], ...historico]);
+
+    try {
+      const created = await pacientesService.createHistorico(novo);
+      setHistorico([created, ...historico]);
       form.reset();
+    } catch (err) {
+      alert("Erro ao adicionar histórico: " + err.message);
     }
   };
 
@@ -632,13 +509,13 @@ export default function AdminPacientesDetalhes() {
       frequencia: form.frequencia.value,
       via_administracao: form.via.value,
     };
-    const { data } = await supabase
-      .from("medicamentos")
-      .insert([novo])
-      .select();
-    if (data) {
-      setMedicamentos([data[0], ...medicamentos]);
+
+    try {
+      const created = await pacientesService.createMedicamento(novo);
+      setMedicamentos([created, ...medicamentos]);
       form.reset();
+    } catch (err) {
+      alert("Erro ao adicionar medicamento: " + err.message);
     }
   };
 
@@ -655,13 +532,13 @@ export default function AdminPacientesDetalhes() {
       glicemia: toInt(form.glicemia.value),
       saturacao_o2: toInt(form.saturacao.value),
     };
-    const { data } = await supabase
-      .from("sinais_vitais")
-      .insert([novo])
-      .select();
-    if (data) {
-      setSinais([data[0], ...sinais]);
+
+    try {
+      const created = await pacientesService.createSinais(novo);
+      setSinais([created, ...sinais]);
       form.reset();
+    } catch (err) {
+      alert("Erro ao adicionar sinais: " + err.message);
     }
   };
 
@@ -680,26 +557,26 @@ export default function AdminPacientesDetalhes() {
       is_extra: form.extra.checked,
     };
 
-    const { data, error } = await supabase
-      .from("plantoes")
-      .insert([novo])
-      .select("*, funcionarios(nome_completo)");
-
-    if (error) {
-      alert("Erro ao agendar: " + error.message);
-    } else {
-      const novaLista = [...plantoes, data[0]].sort(
+    try {
+      const created = await pacientesService.createPlantao(novo);
+      const novaLista = [...plantoes, created].sort(
         (a, b) => new Date(a.data_plantao) - new Date(b.data_plantao),
       );
       setPlantoes(novaLista);
       form.reset();
+    } catch (err) {
+      alert("Erro ao agendar: " + err.message);
     }
   };
 
   const deletarItem = async (tabela, itemId, setLista, listaAtual) => {
     if (!window.confirm("Deletar item?")) return;
-    const { error } = await supabase.from(tabela).delete().eq("id", itemId);
-    if (!error) setLista(listaAtual.filter((i) => i.id !== itemId));
+    try {
+      await pacientesService.deleteFromTable(tabela, itemId);
+      setLista(listaAtual.filter((i) => i.id !== itemId));
+    } catch (err) {
+      alert("Erro ao deletar: " + err.message);
+    }
   };
 
   if (loading)
