@@ -25,6 +25,7 @@ import {
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
+import { pacientesService } from "../services/pacientesService";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -84,13 +85,9 @@ export default function AdminPacientesDetalhes() {
     fetchTudo();
   }, []);
 
-  // --- CORREÇÃO AQUI ---
-  // Essa função força o navegador a entender que o dado do banco (13h) é UTC
-  // E deve ser exibido como horário do Brasil (10h)
   const formatarDataHoraBrasil = (dataString) => {
     if (!dataString) return "";
 
-    // Se a string não tiver indicador de fuso (Z ou +), adicionamos Z para indicar UTC
     const dataIso =
       dataString.includes("Z") || dataString.includes("+")
         ? dataString
@@ -98,13 +95,13 @@ export default function AdminPacientesDetalhes() {
 
     const dataObj = new Date(dataIso);
 
-    if (isNaN(dataObj.getTime())) return dataString; // Fallback se der erro
+    if (isNaN(dataObj.getTime())) return dataString;
 
     return dataObj.toLocaleString("pt-BR", {
       timeZone: "America/Sao_Paulo",
       day: "2-digit",
       month: "2-digit",
-      year: "numeric", // Adicionado o ano pra ficar completo
+      year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -176,7 +173,6 @@ export default function AdminPacientesDetalhes() {
   }
 
   const evolucoesPorMes = evolucoes.reduce((acc, evo) => {
-    // Usar data_registro com a correção para agrupar no mês certo
     const dataIso =
       evo.data_registro.includes("Z") || evo.data_registro.includes("+")
         ? evo.data_registro
@@ -184,7 +180,6 @@ export default function AdminPacientesDetalhes() {
 
     const date = new Date(dataIso);
 
-    // Opcional: Converter para o mês local, caso a virada de mês seja afetada pelo fuso
     const monthKey = date.toLocaleString("pt-BR", {
       timeZone: "America/Sao_Paulo",
       month: "long",
@@ -292,17 +287,20 @@ export default function AdminPacientesDetalhes() {
         const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
         const filePath = `${id}/${fileName}`;
 
-        const { error: uploadError } = await supabase.storage
-          .from("evolucoes")
-          .upload(filePath, file);
+        if (fileInput && fileInput.files[0]) {
+          finalUrl = await pacientesService.uploadEvolucaoArquivo(
+            id,
+            fileInput.files[0],
+          );
+        }
 
-        if (uploadError) throw uploadError;
-
-        const { data: urlData } = supabase.storage
-          .from("evolucoes")
-          .getPublicUrl(filePath);
-
-        newUrls.push(urlData.publicUrl);
+        if (editingId) {
+          await pacientesService.updateEvolucao(editingId, payload);
+          alert("Evolução atualizada com sucesso!");
+        } else {
+          await pacientesService.createEvolucao(payload);
+          alert("Evolução registrada com sucesso!");
+        }
       }
 
       setEvolucaoForm((prev) => ({

@@ -863,7 +863,6 @@ export default function NovaDespesaModal({
         </div>
       )}
 
-      {/* Modais Aninhados */}
       {showSupplierModal && (
         <NovoFornecedorModal
           onClose={() => setShowSupplierModal(false)}
