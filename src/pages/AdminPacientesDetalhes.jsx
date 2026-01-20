@@ -50,7 +50,15 @@ export default function AdminPacientesDetalhes() {
   const [plantoes, setPlantoes] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [listaFuncionarios, setListaFuncionarios] = useState([]);
-
+  const [editingPlantaoId, setEditingPlantaoId] = useState(null);
+  const [plantaoForm, setPlantaoForm] = useState({
+    funcionario: "",
+    data: new Date().toISOString().split("T")[0],
+    inicio: "07:00",
+    fim: "19:00",
+    turno: "Diurno",
+    extra: false,
+  });
   const [editingEvolucaoId, setEditingEvolucaoId] = useState(null);
   const [evolucaoForm, setEvolucaoForm] = useState({
     funcionario_id: "",
@@ -190,7 +198,7 @@ export default function AdminPacientesDetalhes() {
 
   const iniciarEdicaoEvolucao = (item) => {
     const funcEncontrado = listaFuncionarios.find(
-      (f) => f.nome_completo === item.profissional_nome
+      (f) => f.nome_completo === item.profissional_nome,
     );
 
     setEvolucaoForm({
@@ -233,7 +241,7 @@ export default function AdminPacientesDetalhes() {
 
     try {
       const funcionarioSelecionado = listaFuncionarios.find(
-        (f) => f.id == evolucaoForm.funcionario_id
+        (f) => f.id == evolucaoForm.funcionario_id,
       );
       const nomeProfissional = funcionarioSelecionado
         ? funcionarioSelecionado.nome_completo
@@ -297,8 +305,8 @@ export default function AdminPacientesDetalhes() {
         if (editingEvolucaoId) {
           setEvolucoes(
             evolucoes.map((evo) =>
-              evo.id === editingEvolucaoId ? data[0] : evo
-            )
+              evo.id === editingEvolucaoId ? data[0] : evo,
+            ),
           );
           alert("Evolução atualizada!");
         } else {
@@ -314,7 +322,90 @@ export default function AdminPacientesDetalhes() {
       setUploading(false);
     }
   };
+  const handlePlantaoChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setPlantaoForm((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+  };
+  const handleSalvarPlantao = async (e) => {
+    e.preventDefault();
 
+    const payload = {
+      paciente_id: id,
+      funcionario_id: plantaoForm.funcionario,
+      data_plantao: plantaoForm.data,
+      horario_inicio: plantaoForm.inicio,
+      horario_fim: plantaoForm.fim,
+      tipo_turno: plantaoForm.turno,
+      status: "agendado",
+      is_extra: plantaoForm.extra,
+    };
+
+    if (editingPlantaoId) delete payload.status;
+
+    let data, error;
+
+    if (editingPlantaoId) {
+      const res = await supabase
+        .from("plantoes")
+        .update(payload)
+        .eq("id", editingPlantaoId)
+        .select("*, funcionarios(nome_completo)");
+      data = res.data;
+      error = res.error;
+    } else {
+      const res = await supabase
+        .from("plantoes")
+        .insert([payload])
+        .select("*, funcionarios(nome_completo)");
+      data = res.data;
+      error = res.error;
+    }
+
+    if (error) {
+      alert("Erro ao salvar plantão: " + error.message);
+    } else {
+      if (editingPlantaoId) {
+        setPlantoes(
+          plantoes.map((p) => (p.id === editingPlantaoId ? data[0] : p)),
+        );
+        alert("Escala atualizada!");
+      } else {
+        const novaLista = [...plantoes, data[0]].sort(
+          (a, b) => new Date(a.data_plantao) - new Date(b.data_plantao),
+        );
+        setPlantoes(novaLista);
+        alert("Plantão agendado!");
+      }
+      cancelarEdicaoPlantao();
+    }
+  };
+  const iniciarEdicaoPlantao = (plantao) => {
+    setPlantaoForm({
+      funcionario: plantao.funcionario_id,
+      data: plantao.data_plantao,
+      inicio: plantao.horario_inicio,
+      fim: plantao.horario_fim,
+      turno: plantao.tipo_turno,
+      extra: plantao.is_extra,
+    });
+    setEditingPlantaoId(plantao.id);
+    window.scrollTo({ top: 200, behavior: "smooth" });
+  };
+
+  const cancelarEdicaoPlantao = () => {
+    setEditingPlantaoId(null);
+    setPlantaoForm({
+      funcionario: "",
+      data: new Date().toISOString().split("T")[0],
+      inicio: "07:00",
+      fim: "19:00",
+      turno: "Diurno",
+      extra: false,
+    });
+  };
   const handleCriarAcesso = async (e) => {
     e.preventDefault();
     if (novaSenha.length < 6) {
@@ -344,7 +435,7 @@ export default function AdminPacientesDetalhes() {
 
       if (!userUuid && authError?.message.includes("already registered")) {
         throw new Error(
-          "Email já cadastrado! Por segurança, exclua o usuário no menu Authentication para recriar, ou use outro email."
+          "Email já cadastrado! Por segurança, exclua o usuário no menu Authentication para recriar, ou use outro email.",
         );
       }
 
@@ -365,7 +456,7 @@ export default function AdminPacientesDetalhes() {
           email_responsavel: emailFamilia,
         }));
         alert(
-          `Acesso criado com sucesso!\nLogin: ${emailFamilia}\nSenha: ${novaSenha}`
+          `Acesso criado com sucesso!\nLogin: ${emailFamilia}\nSenha: ${novaSenha}`,
         );
         setModalAcessoOpen(false);
       }
@@ -491,7 +582,7 @@ export default function AdminPacientesDetalhes() {
       alert("Erro ao agendar: " + error.message);
     } else {
       const novaLista = [...plantoes, data[0]].sort(
-        (a, b) => new Date(a.data_plantao) - new Date(b.data_plantao)
+        (a, b) => new Date(a.data_plantao) - new Date(b.data_plantao),
       );
       setPlantoes(novaLista);
       form.reset();
@@ -600,7 +691,7 @@ export default function AdminPacientesDetalhes() {
                       onClick={async () => {
                         if (
                           !window.confirm(
-                            "Tem certeza? Isso vai remover o acesso da família ao portal."
+                            "Tem certeza? Isso vai remover o acesso da família ao portal.",
                           )
                         )
                           return;
@@ -615,7 +706,7 @@ export default function AdminPacientesDetalhes() {
                             email_responsavel: null,
                           }));
                           alert(
-                            "Acesso removido. Você pode criar um novo agora."
+                            "Acesso removido. Você pode criar um novo agora.",
                           );
                         } catch (err) {
                           alert("Erro ao remover: " + err.message);
@@ -703,7 +794,7 @@ export default function AdminPacientesDetalhes() {
                     <a
                       href={`https://wa.me/${paciente.telefone_responsavel?.replace(
                         /\D/g,
-                        ""
+                        "",
                       )}`}
                       target="_blank"
                       rel="noreferrer"
@@ -963,7 +1054,7 @@ export default function AdminPacientesDetalhes() {
                                         month: "2-digit",
                                         hour: "2-digit",
                                         minute: "2-digit",
-                                      }
+                                      },
                                     )}
                                   </span>
                                 </div>
@@ -983,7 +1074,7 @@ export default function AdminPacientesDetalhes() {
                                       "evolucoes",
                                       evo.id,
                                       setEvolucoes,
-                                      evolucoes
+                                      evolucoes,
                                     )
                                   }
                                   className="text-gray-300 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-full transition-all"
@@ -1065,14 +1156,28 @@ export default function AdminPacientesDetalhes() {
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-1">
               <div className="bg-white rounded-2xl shadow border border-beige p-6 sticky top-6">
-                <h3 className="text-lg font-bold text-primary mb-4 flex items-center gap-2">
-                  <Calendar size={20} /> Agendar Plantão
-                </h3>
-                <form onSubmit={addPlantao} className="space-y-4">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-bold text-primary flex items-center gap-2">
+                    <Calendar size={20} />
+                    {editingPlantaoId ? "Editar Plantão" : "Agendar Plantão"}
+                  </h3>
+                  {editingPlantaoId && (
+                    <button
+                      onClick={cancelarEdicaoPlantao}
+                      className="text-xs text-red-500 hover:underline"
+                    >
+                      Cancelar
+                    </button>
+                  )}
+                </div>
+
+                <form onSubmit={handleSalvarPlantao} className="space-y-4">
                   <div>
                     <label className="label-mini">Funcionário</label>
                     <select
                       name="funcionario"
+                      value={plantaoForm.funcionario}
+                      onChange={handlePlantaoChange}
                       className="input-mini bg-white"
                       required
                     >
@@ -1090,13 +1195,20 @@ export default function AdminPacientesDetalhes() {
                       <input
                         type="date"
                         name="data"
+                        value={plantaoForm.data}
+                        onChange={handlePlantaoChange}
                         className="input-mini"
                         required
                       />
                     </div>
                     <div>
                       <label className="label-mini">Turno</label>
-                      <select name="turno" className="input-mini bg-white">
+                      <select
+                        name="turno"
+                        value={plantaoForm.turno}
+                        onChange={handlePlantaoChange}
+                        className="input-mini bg-white"
+                      >
                         <option>Diurno</option>
                         <option>Noturno</option>
                         <option>24h</option>
@@ -1109,9 +1221,10 @@ export default function AdminPacientesDetalhes() {
                       <input
                         type="time"
                         name="inicio"
+                        value={plantaoForm.inicio}
+                        onChange={handlePlantaoChange}
                         className="input-mini"
                         required
-                        defaultValue="07:00"
                       />
                     </div>
                     <div>
@@ -1119,9 +1232,10 @@ export default function AdminPacientesDetalhes() {
                       <input
                         type="time"
                         name="fim"
+                        value={plantaoForm.fim}
+                        onChange={handlePlantaoChange}
                         className="input-mini"
                         required
-                        defaultValue="19:00"
                       />
                     </div>
                   </div>
@@ -1130,6 +1244,8 @@ export default function AdminPacientesDetalhes() {
                       <input
                         type="checkbox"
                         name="extra"
+                        checked={plantaoForm.extra}
+                        onChange={handlePlantaoChange}
                         className="w-5 h-5 accent-purple-600"
                       />
                       <span className="font-bold text-purple-800 text-sm">
@@ -1137,14 +1253,16 @@ export default function AdminPacientesDetalhes() {
                       </span>
                     </label>
                   </div>
-                  <button className="w-full bg-primary hover:bg-[#3A4A3E] text-white font-bold py-3 rounded-xl transition-all shadow-md mt-2">
-                    Confirmar Agenda
+                  <button
+                    className={`w-full text-white font-bold py-3 rounded-xl transition-all shadow-md mt-2 ${editingPlantaoId ? "bg-amber-600 hover:bg-amber-700" : "bg-primary hover:bg-[#3A4A3E]"}`}
+                  >
+                    {editingPlantaoId
+                      ? "Salvar Alterações"
+                      : "Confirmar Agenda"}
                   </button>
                 </form>
               </div>
             </div>
-
-            {/* Lista de Escalas com Acordeão */}
             <div className="lg:col-span-2 space-y-4">
               {plantoes.length === 0 && (
                 <div className="text-center p-8 text-darkText/50 bg-white rounded-2xl border border-dashed">
@@ -1152,7 +1270,6 @@ export default function AdminPacientesDetalhes() {
                 </div>
               )}
 
-              {/* AQUI ESTÁ A CORREÇÃO: Iterar sobre os MÊSES, não direto nos plantões */}
               {Object.keys(plantoesPorMes).map((monthKey) => {
                 const isOpen = expandedMonthsEscalas[monthKey];
 
@@ -1191,7 +1308,7 @@ export default function AdminPacientesDetalhes() {
                             pDia,
                             12,
                             0,
-                            0
+                            0,
                           );
 
                           return (
@@ -1246,8 +1363,8 @@ export default function AdminPacientesDetalhes() {
                                     plantao.status === "agendado"
                                       ? "border-blue-200 text-blue-600 bg-blue-50"
                                       : plantao.status === "realizado"
-                                      ? "border-green-200 text-green-600 bg-green-50"
-                                      : "border-gray-200 text-gray-400"
+                                        ? "border-green-200 text-green-600 bg-green-50"
+                                        : "border-gray-200 text-gray-400"
                                   }`}
                                 >
                                   {plantao.status}
@@ -1258,12 +1375,18 @@ export default function AdminPacientesDetalhes() {
                                       "plantoes",
                                       plantao.id,
                                       setPlantoes,
-                                      plantoes
+                                      plantoes,
                                     )
                                   }
                                   className="text-gray-300 hover:text-red-500 p-2 opacity-0 group-hover:opacity-100 transition-opacity"
                                 >
                                   <Trash2 size={16} />
+                                </button>
+                                <button
+                                  onClick={() => iniciarEdicaoPlantao(plantao)}
+                                  className="text-gray-300 hover:text-blue-500 p-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                  <Edit size={16} />
                                 </button>
                               </div>
                             </div>
@@ -1371,7 +1494,7 @@ export default function AdminPacientesDetalhes() {
                               "sinais_vitais",
                               item.id,
                               setSinais,
-                              sinais
+                              sinais,
                             )
                           }
                           className="text-red-300 hover:text-red-500"
@@ -1445,7 +1568,7 @@ export default function AdminPacientesDetalhes() {
                           "historico_clinico",
                           item.id,
                           setHistorico,
-                          historico
+                          historico,
                         )
                       }
                       className="text-red-300 hover:text-red-500"
@@ -1524,7 +1647,7 @@ export default function AdminPacientesDetalhes() {
                           "medicamentos",
                           med.id,
                           setMedicamentos,
-                          medicamentos
+                          medicamentos,
                         )
                       }
                       className="text-red-300 hover:text-red-500"
