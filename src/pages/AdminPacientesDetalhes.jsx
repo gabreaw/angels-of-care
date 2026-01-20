@@ -240,7 +240,20 @@ export default function AdminPacientesDetalhes() {
     const funcEncontrado = listaFuncionarios.find(
       (f) => f.nome_completo === item.profissional_nome,
     );
+    let urls = [];
+    try {
+      if (Array.isArray(item.arquivo_urls)) urls = item.arquivo_urls;
+      else if (typeof item.arquivo_url === "string") {
+        if (item.arquivo_url.startsWith("["))
+          urls = JSON.parse(item.arquivo_url);
+        else urls = [item.arquivo_url];
+      }
+    } catch (e) {
+      console.error("Erro parser anexos", e);
+    }
+
     const dataSimples = item.data_registro.split("T")[0];
+
     setEvolucaoForm({
       funcionario_id: funcEncontrado ? funcEncontrado.id : "",
       data_registro: dataSimples,
@@ -251,12 +264,58 @@ export default function AdminPacientesDetalhes() {
       aspiracao: item.aspiracao_tqt,
       decubito: item.mudanca_decubito,
       higiene: item.higiene_realizada,
-      arquivo_url: item.arquivo_url,
+      arquivo_url: null,
+      arquivo_urls: urls,
     });
     setEditingEvolucaoId(item.id);
     window.scrollTo({ top: 200, behavior: "smooth" });
   };
+  const removeAnexo = (indexToRemove) => {
+    setEvolucaoForm((prev) => ({
+      ...prev,
+      arquivo_urls: prev.arquivo_urls.filter(
+        (_, index) => index !== indexToRemove,
+      ),
+    }));
+  };
+  const handleFileUpload = async (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
+    setUploading(true);
+    const newUrls = [];
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const fileExt = file.name.split(".").pop();
+        const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
+        const filePath = `${id}/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("evolucoes")
+          .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage
+          .from("evolucoes")
+          .getPublicUrl(filePath);
+
+        newUrls.push(urlData.publicUrl);
+      }
+
+      setEvolucaoForm((prev) => ({
+        ...prev,
+        arquivo_urls: [...(prev.arquivo_urls || []), ...newUrls],
+      }));
+    } catch (err) {
+      alert("Erro no upload: " + err.message);
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
   const cancelarEdicaoEvolucao = () => {
     setEditingEvolucaoId(null);
     setEvolucaoForm({
@@ -296,7 +355,8 @@ export default function AdminPacientesDetalhes() {
         : "Admin/Desconhecido";
 
       const fileInput = e.target.anexo;
-      let finalUrl = evolucaoForm.arquivo_url;
+      const finalUrls = evolucaoForm.arquivo_urls || [];
+      const arquivoUrlLegacy = finalUrls.length > 0 ? finalUrls[0] : null;
 
       if (fileInput && fileInput.files[0]) {
         const file = fileInput.files[0];
@@ -328,7 +388,8 @@ export default function AdminPacientesDetalhes() {
         aspiracao_tqt: evolucaoForm.aspiracao,
         mudanca_decubito: evolucaoForm.decubito,
         higiene_realizada: evolucaoForm.higiene,
-        arquivo_url: finalUrl,
+        arquivo_url: JSON.stringify(finalUrls),
+        arquivo_urls: finalUrls,
       };
 
       let data, error;
@@ -960,22 +1021,56 @@ export default function AdminPacientesDetalhes() {
                   <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 border-dashed">
                     <label className="label-mini flex items-center gap-2 mb-2 text-blue-800 font-bold">
                       <Paperclip size={16} />
-                      Anexar Documentos / Fotos (múltiplos)
+                      Anexar Documentos / Fotos
                     </label>
+
+                    {/* Input agora chama handleFileUpload diretamente */}
                     <input
                       type="file"
-                      name="anexo"
-                      accept="image/*, application/pdf"
                       multiple
-                      className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 transition-colors cursor-pointer"
+                      accept="image/*, application/pdf"
+                      onChange={handleFileUpload}
+                      disabled={uploading}
+                      className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 transition-colors cursor-pointer disabled:opacity-50"
                     />
+
                     {evolucaoForm.arquivo_urls &&
                       evolucaoForm.arquivo_urls.length > 0 && (
-                        <p className="text-xs text-green-600 mt-2">
-                          {evolucaoForm.arquivo_urls.length} arquivo(s)
-                          atual(is)
-                        </p>
+                        <div className="mt-3 space-y-2">
+                          <p className="text-xs font-bold text-gray-500 uppercase">
+                            Anexos ({evolucaoForm.arquivo_urls.length})
+                          </p>
+                          <div className="grid grid-cols-1 gap-2">
+                            {evolucaoForm.arquivo_urls.map((url, index) => (
+                              <div
+                                key={index}
+                                className="flex items-center justify-between bg-white p-2 rounded border border-blue-100 text-xs"
+                              >
+                                <a
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 truncate max-w-[200px] hover:underline flex items-center gap-1"
+                                >
+                                  <Paperclip size={10} /> Anexo {index + 1}
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => removeAnexo(index)}
+                                  className="text-red-400 hover:text-red-600 p-1"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       )}
+                    {uploading && (
+                      <p className="text-xs text-blue-600 mt-2 animate-pulse">
+                        Enviando arquivos...
+                      </p>
+                    )}
                   </div>
 
                   <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
@@ -1442,7 +1537,7 @@ export default function AdminPacientesDetalhes() {
             </div>
           </div>
         )}
-             {activeTab === "sinais" && (
+        {activeTab === "sinais" && (
           <div className="bg-white rounded-2xl shadow border border-beige p-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
               <h3 className="text-lg font-bold text-primary flex items-center gap-2">
