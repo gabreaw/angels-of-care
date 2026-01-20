@@ -62,7 +62,11 @@ export default function AdminPacientesDetalhes() {
   const [editingEvolucaoId, setEditingEvolucaoId] = useState(null);
   const [evolucaoForm, setEvolucaoForm] = useState({
     funcionario_id: "",
-    data_registro: new Date().toISOString().split("T")[0],
+    data_registro: new Date()
+      .toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })
+      .split("/")
+      .reverse()
+      .join("-"),
     turno: "Diurno",
     texto: "",
     diurese: false,
@@ -79,6 +83,33 @@ export default function AdminPacientesDetalhes() {
   useEffect(() => {
     fetchTudo();
   }, []);
+
+  // --- CORREÇÃO AQUI ---
+  // Essa função força o navegador a entender que o dado do banco (13h) é UTC
+  // E deve ser exibido como horário do Brasil (10h)
+  const formatarDataHoraBrasil = (dataString) => {
+    if (!dataString) return "";
+
+    // Se a string não tiver indicador de fuso (Z ou +), adicionamos Z para indicar UTC
+    const dataIso =
+      dataString.includes("Z") || dataString.includes("+")
+        ? dataString
+        : dataString + "Z";
+
+    const dataObj = new Date(dataIso);
+
+    if (isNaN(dataObj.getTime())) return dataString; // Fallback se der erro
+
+    return dataObj.toLocaleString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric", // Adicionado o ano pra ficar completo
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+  // ---------------------
 
   async function fetchTudo() {
     setLoading(true);
@@ -145,8 +176,17 @@ export default function AdminPacientesDetalhes() {
   }
 
   const evolucoesPorMes = evolucoes.reduce((acc, evo) => {
-    const date = new Date(evo.data_registro);
+    // Usar data_registro com a correção para agrupar no mês certo
+    const dataIso =
+      evo.data_registro.includes("Z") || evo.data_registro.includes("+")
+        ? evo.data_registro
+        : evo.data_registro + "Z";
+
+    const date = new Date(dataIso);
+
+    // Opcional: Converter para o mês local, caso a virada de mês seja afetada pelo fuso
     const monthKey = date.toLocaleString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
       month: "long",
       year: "numeric",
     });
@@ -200,12 +240,10 @@ export default function AdminPacientesDetalhes() {
     const funcEncontrado = listaFuncionarios.find(
       (f) => f.nome_completo === item.profissional_nome,
     );
-
+    const dataSimples = item.data_registro.split("T")[0];
     setEvolucaoForm({
       funcionario_id: funcEncontrado ? funcEncontrado.id : "",
-      data_registro: item.data_registro
-        ? item.data_registro.split("T")[0]
-        : new Date().toISOString().split("T")[0],
+      data_registro: dataSimples,
       turno: item.turno,
       texto: item.texto_evolucao,
       diurese: item.diurese_presente,
@@ -223,7 +261,11 @@ export default function AdminPacientesDetalhes() {
     setEditingEvolucaoId(null);
     setEvolucaoForm({
       funcionario_id: "",
-      data_registro: new Date().toISOString().split("T")[0],
+      data_registro: new Date()
+        .toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })
+        .split("/")
+        .reverse()
+        .join("-"),
       turno: "Diurno",
       texto: "",
       diurese: false,
@@ -238,7 +280,13 @@ export default function AdminPacientesDetalhes() {
   const handleSalvarEvolucao = async (e) => {
     e.preventDefault();
     setUploading(true);
+    const dataForm = evolucaoForm.data_registro;
 
+    const agora = new Date();
+    const hora = String(agora.getHours()).padStart(2, "0");
+    const minuto = String(agora.getMinutes()).padStart(2, "0");
+    const segundo = String(agora.getSeconds()).padStart(2, "0");
+    const dataParaBanco = `${dataForm} ${hora}:${minuto}:${segundo}`;
     try {
       const funcionarioSelecionado = listaFuncionarios.find(
         (f) => f.id == evolucaoForm.funcionario_id,
@@ -272,7 +320,7 @@ export default function AdminPacientesDetalhes() {
       const payload = {
         paciente_id: id,
         profissional_nome: nomeProfissional,
-        data_registro: evolucaoForm.data_registro,
+        data_registro: dataParaBanco,
         turno: evolucaoForm.turno,
         texto_evolucao: evolucaoForm.texto,
         diurese_presente: evolucaoForm.diurese,
@@ -866,6 +914,7 @@ export default function AdminPacientesDetalhes() {
                         ))}
                       </select>
                     </div>
+                    {/* AQUI ESTA A CORREÇÃO DE EXIBIÇÃO NO FORMULÁRIO */}
                     <div>
                       <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
                         Data
@@ -1046,16 +1095,9 @@ export default function AdminPacientesDetalhes() {
                                   <span className="block text-sm font-bold text-darkText">
                                     {evo.profissional_nome}
                                   </span>
+                                  {/* AQUI ESTÁ A CORREÇÃO DE VISUALIZAÇÃO */}
                                   <span className="text-[10px] text-gray-400 font-medium">
-                                    {new Date(evo.data_registro).toLocaleString(
-                                      "pt-BR",
-                                      {
-                                        day: "2-digit",
-                                        month: "2-digit",
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                      },
-                                    )}
+                                    {formatarDataHoraBrasil(evo.data_registro)}
                                   </span>
                                 </div>
                               </div>
@@ -1400,7 +1442,7 @@ export default function AdminPacientesDetalhes() {
             </div>
           </div>
         )}
-        {activeTab === "sinais" && (
+             {activeTab === "sinais" && (
           <div className="bg-white rounded-2xl shadow border border-beige p-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
               <h3 className="text-lg font-bold text-primary flex items-center gap-2">

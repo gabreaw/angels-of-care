@@ -38,7 +38,17 @@ export default function ProviderHome() {
       setUsuario(func);
 
       if (func) {
-        const hoje = new Date().toISOString().split("T")[0];
+        const agora = new Date();
+
+        const hoje = agora.toLocaleDateString("sv-SE", {
+          timeZone: "America/Sao_Paulo",
+        });
+
+        const horaAtual = agora.toLocaleTimeString("pt-BR", {
+          timeZone: "America/Sao_Paulo",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
 
         const { data: prox } = await supabase
           .from("plantoes")
@@ -49,26 +59,36 @@ export default function ProviderHome() {
             horario_inicio, 
             horario_fim, 
             pacientes (id, nome_paciente, endereco_completo)
-          `
+          `,
           )
           .eq("funcionario_id", func.id)
           .gte("data_plantao", hoje)
           .order("data_plantao", { ascending: true })
           .order("horario_inicio", { ascending: true })
-          .limit(1)
-          .maybeSingle(); 
+          .limit(10); 
 
-        setProximoPlantao(prox);
+        let nextShift = null;
+        if (prox && prox.length > 0) {
+          nextShift = prox.find((p) => {
+            if (p.data_plantao > hoje) return true;
+            if (p.data_plantao === hoje && p.horario_fim > horaAtual) {
+              return true;
+            }
+            return false;
+          });
+        }
+
+        setProximoPlantao(nextShift || null);
 
         const { data: plantoesFuturos } = await supabase
           .from("plantoes")
           .select(
             `
             pacientes (id, nome_paciente, endereco_completo, diagnostico, grau_dependencia)
-          `
+          `,
           )
           .eq("funcionario_id", func.id)
-          .gte("data_plantao", hoje)
+          .gte("data_plantao", hoje) 
           .order("data_plantao", { ascending: true });
 
         const pacientesMap = new Map();
@@ -96,12 +116,7 @@ export default function ProviderHome() {
   const formatarData = (dataStr) => {
     if (!dataStr) return "";
     const [ano, mes, dia] = dataStr.split("-");
-    const data = new Date(ano, mes - 1, dia, 12, 0, 0);
-    return data.toLocaleDateString("pt-BR", {
-      weekday: "short",
-      day: "2-digit",
-      month: "short",
-    });
+    return `${dia}/${mes}`;
   };
 
   return (
