@@ -11,6 +11,7 @@ import {
   Settings,
   Repeat,
   Trash2,
+  AlertTriangle, // Ícone para o aviso de recorrência
 } from "lucide-react";
 import NovoFornecedorModal from "./NovoFornecedorModal";
 import GerenciarCategoriasModal from "./GerenciarCategoriasModal";
@@ -23,9 +24,14 @@ export default function NovaDespesaModal({
 }) {
   const [loading, setLoading] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
+
+  // Modais auxiliares
   const [showSupplierModal, setShowSupplierModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
+
+  // Modal de confirmação de recorrência
+  const [showRecorrenciaOptions, setShowRecorrenciaOptions] = useState(false);
 
   const fileInputRef = useRef(null);
 
@@ -49,7 +55,7 @@ export default function NovaDespesaModal({
     conta_id: "",
     status: "pendente",
     observacoes: "",
-    anexo_urls: [],
+    anexo_urls: [], // Array de objetos {name, url}
   });
 
   useEffect(() => {
@@ -62,11 +68,11 @@ export default function NovaDespesaModal({
           if (despesaParaEditar.anexo_url.trim().startsWith("[")) {
             existingUrls = JSON.parse(despesaParaEditar.anexo_url);
           } else {
+            // Compatibilidade com arquivos antigos (string única)
             existingUrls = [despesaParaEditar.anexo_url];
           }
         }
       } catch (e) {
-        console.error("Error parsing attachments", e);
         existingUrls = despesaParaEditar.anexo_url
           ? [despesaParaEditar.anexo_url]
           : [];
@@ -84,7 +90,10 @@ export default function NovaDespesaModal({
         categoria_id: despesaParaEditar.categoria_id || "",
         centro_custo: despesaParaEditar.centro_custo || "",
         codigo_referencia: despesaParaEditar.codigo_referencia || "",
-        parcelamento: "avista",
+        // Se tem recorrencia_id, tratamos como recorrente na lógica, mas visualmente pode mostrar o tipo original
+        parcelamento: despesaParaEditar.recorrencia_id
+          ? "recorrente"
+          : "avista",
         numero_parcelas: 1,
         frequencia_recorrencia: "mensal",
         data_vencimento: despesaParaEditar.data_vencimento,
@@ -131,6 +140,7 @@ export default function NovaDespesaModal({
         const fileExt = file.name.split(".").pop().toLowerCase().trim();
         const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
         const filePath = `private/despesas/${fileName}`;
+
         const { error: uploadError } = await supabase.storage
           .from("financeiro")
           .upload(filePath, file);
@@ -140,6 +150,8 @@ export default function NovaDespesaModal({
         const { data } = supabase.storage
           .from("financeiro")
           .getPublicUrl(filePath);
+
+        // Salva objeto com NOME e URL
         newAttachments.push({
           name: file.name,
           url: data.publicUrl,
@@ -159,6 +171,7 @@ export default function NovaDespesaModal({
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
+
   const removeAttachment = (indexToRemove) => {
     setFormData((prev) => ({
       ...prev,
@@ -166,24 +179,36 @@ export default function NovaDespesaModal({
     }));
   };
 
-  const handleSubmit = async (e) => {
+  // Intercepta o submit para verificar recorrência
+  const handlePreSubmit = (e) => {
     e.preventDefault();
+    if (despesaParaEditar && despesaParaEditar.recorrencia_id) {
+      setShowRecorrenciaOptions(true);
+    } else {
+      handleSubmit("unico");
+    }
+  };
+
+  const handleSubmit = async (modoEdicao = "unico") => {
     setLoading(true);
+
+    // Padroniza anexos para salvar nomes corretamente
     const anexosPadronizados = formData.anexo_urls.map((item) => {
       if (typeof item === "string") {
         const nomeExtraido = decodeURIComponent(
-          item.split("/").pop().split("?")[0]
+          item.split("/").pop().split("?")[0],
         );
         return { name: nomeExtraido, url: item };
       }
       return item;
     });
     const anexoUrlString = JSON.stringify(anexosPadronizados);
+
     const valorTotal = formData.valor
       ? parseFloat(
           String(formData.valor)
             .replace(/[^\d,]/g, "")
-            .replace(",", ".")
+            .replace(",", "."),
         )
       : 0;
 
@@ -204,19 +229,52 @@ export default function NovaDespesaModal({
 
     try {
       if (despesaParaEditar) {
-        const { error } = await supabase
-          .from("financeiro_transacoes")
-          .update({
-            ...payloadBase,
-            valor: valorTotal,
-            data_vencimento: formData.data_vencimento,
-          })
-          .eq("id", despesaParaEditar.id);
+        // --- CENÁRIO: ATUALIZAR APENAS UM ---
+        if (modoEdicao === "unico") {
+          const { error } = await supabase
+            .from("financeiro_transacoes")
+            .update({
+              ...payloadBase,
+              valor: valorTotal,
+              data_vencimento: formData.data_vencimento,
+            })
+            .eq("id", despesaParaEditar.id);
 
-        if (error) throw error;
+          if (error) throw error;
+
+          // --- CENÁRIO: ATUALIZAR ESTE E FUTUROS ---
+        } else if (modoEdicao === "futuros") {
+          // 1. Atualiza o atual
+          await supabase
+            .from("financeiro_transacoes")
+            .update({
+              ...payloadBase,
+              valor: valorTotal,
+              data_vencimento: formData.data_vencimento,
+            })
+            .eq("id", despesaParaEditar.id);
+
+          // 2. Atualiza os próximos da mesma série (pelo recorrencia_id)
+          // Nota: Não alteramos a data de vencimento dos próximos para não bagunçar os meses
+          const { error } = await supabase
+            .from("financeiro_transacoes")
+            .update({
+              ...payloadBase, // Atualiza desc, categoria, obs, anexos
+              valor: valorTotal, // Atualiza valor
+            })
+            .eq("recorrencia_id", despesaParaEditar.recorrencia_id)
+            .gt("data_vencimento", despesaParaEditar.data_vencimento) // Apenas datas futuras
+            .neq("status", "pago"); // Opcional: não mexe no que já foi pago
+
+          if (error) throw error;
+        }
+
         alert("Despesa atualizada!");
       } else {
+        // --- CRIAÇÃO ---
         let lancamentos = [];
+        // Gera um ID para vincular as parcelas
+        const recorrenciaId = crypto.randomUUID();
 
         if (
           formData.parcelamento === "parcelado" &&
@@ -229,9 +287,8 @@ export default function NovaDespesaModal({
 
             lancamentos.push({
               ...payloadBase,
-              descricao: `${formData.descricao} (${i + 1}/${
-                formData.numero_parcelas
-              })`,
+              recorrencia_id: recorrenciaId, // Vínculo
+              descricao: `${formData.descricao} (${i + 1}/${formData.numero_parcelas})`,
               valor: valorParcela,
               data_vencimento: dataBase.toISOString().split("T")[0],
               status: "pendente",
@@ -253,9 +310,8 @@ export default function NovaDespesaModal({
 
             lancamentos.push({
               ...payloadBase,
-              descricao: `${formData.descricao} (Recorrente ${i + 1}/${
-                formData.numero_parcelas
-              })`,
+              recorrencia_id: recorrenciaId, // Vínculo
+              descricao: `${formData.descricao} (Recorrente ${i + 1}/${formData.numero_parcelas})`,
               valor: valorTotal,
               data_vencimento: dataBase.toISOString().split("T")[0],
               status: "pendente",
@@ -286,6 +342,7 @@ export default function NovaDespesaModal({
       alert("Erro: " + err.message);
     } finally {
       setLoading(false);
+      setShowRecorrenciaOptions(false);
     }
   };
 
@@ -323,9 +380,10 @@ export default function NovaDespesaModal({
           </div>
 
           <div className="flex-1 overflow-y-auto p-8 bg-gray-50">
+            {/* O formulário chama handlePreSubmit para verificar a recorrência antes */}
             <form
               id="form-despesa"
-              onSubmit={handleSubmit}
+              onSubmit={handlePreSubmit}
               className="space-y-6"
             >
               <section className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
@@ -630,6 +688,8 @@ export default function NovaDespesaModal({
                   </div>
                 </div>
               </section>
+
+              {/* Seção de Anexos VISUAL (Melhorada) */}
               <section className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                 <div className="mb-4">
                   <label className="text-xs font-bold text-gray-500 mb-1 block">
@@ -642,6 +702,7 @@ export default function NovaDespesaModal({
                     className="w-full p-2 border rounded-lg h-20 resize-none"
                   />
                 </div>
+
                 {formData.anexo_urls.length > 0 && (
                   <div className="mb-4 space-y-2">
                     <label className="text-xs font-bold text-gray-500 block">
@@ -654,7 +715,7 @@ export default function NovaDespesaModal({
                         const fileName =
                           typeof anexo === "string"
                             ? decodeURIComponent(
-                                anexo.split("/").pop().split("?")[0]
+                                anexo.split("/").pop().split("?")[0],
                               )
                             : anexo.name;
 
@@ -686,6 +747,7 @@ export default function NovaDespesaModal({
                     </div>
                   </div>
                 )}
+
                 <div
                   className={`border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50 transition-colors ${
                     uploadingFile ? "opacity-50 pointer-events-none" : ""
@@ -739,6 +801,67 @@ export default function NovaDespesaModal({
           </div>
         </div>
       </div>
+
+      {/* --- MODAL DE OPÇÕES DE RECORRÊNCIA --- */}
+      {showRecorrenciaOptions && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-md rounded-xl shadow-2xl p-6 border-t-4 border-orange-500 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center gap-3 mb-4 text-orange-600">
+              <AlertTriangle size={28} />
+              <h3 className="text-lg font-bold text-gray-800">
+                Alterar repetição
+              </h3>
+            </div>
+
+            <p className="text-gray-600 mb-6 text-sm">
+              Este é um lançamento recorrente. Você deseja aplicar as alterações
+              apenas neste item ou em todos os futuros?
+            </p>
+
+            <div className="space-y-3">
+              <button
+                onClick={() => handleSubmit("unico")}
+                className="w-full text-left px-4 py-3 rounded-lg border border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all flex items-center gap-3 group"
+              >
+                <div className="w-4 h-4 rounded-full border border-gray-400 group-hover:border-blue-500 group-hover:bg-blue-500"></div>
+                <div>
+                  <span className="block font-bold text-gray-700 group-hover:text-blue-700">
+                    Apenas este lançamento
+                  </span>
+                  <span className="block text-xs text-gray-500">
+                    Outras parcelas não serão afetadas.
+                  </span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => handleSubmit("futuros")}
+                className="w-full text-left px-4 py-3 rounded-lg border border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all flex items-center gap-3 group"
+              >
+                <div className="w-4 h-4 rounded-full border border-gray-400 group-hover:border-blue-500 group-hover:bg-blue-500"></div>
+                <div>
+                  <span className="block font-bold text-gray-700 group-hover:text-blue-700">
+                    Este e os próximos
+                  </span>
+                  <span className="block text-xs text-gray-500">
+                    Atualiza valor e dados de todos os lançamentos pendentes
+                    desta série.
+                  </span>
+                </div>
+              </button>
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setShowRecorrenciaOptions(false)}
+                className="text-gray-500 font-bold text-sm hover:text-gray-700"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modais Aninhados */}
       {showSupplierModal && (
