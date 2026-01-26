@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+  import React, { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { createClient } from "@supabase/supabase-js";
@@ -40,6 +40,7 @@ export default function AdminEditar() {
     estado_civil: "",
     email: "",
     telefone: "",
+    telefone_alternativo: "",
     cep: "",
     logradouro: "",
     numero: "",
@@ -95,7 +96,7 @@ export default function AdminEditar() {
           banco: data.banco || "",
           agencia: data.agencia || "",
           conta: data.conta || "",
-          auth_id: data.auth_id || null, // Garante null se vazio
+          auth_id: data.auth_id || null, 
           doc_identidade_url: data.doc_identidade_url || [],
           doc_cartao_cnpj_url: data.doc_cartao_cnpj_url || [],
           doc_comprovante_endereco_url: data.doc_comprovante_endereco_url || [],
@@ -139,6 +140,7 @@ export default function AdminEditar() {
     if (name === "cpf") value = mascaraCPF(value);
     if (name === "cnpj") value = mascaraCNPJ(value);
     if (name === "telefone") value = mascaraTelefone(value);
+    if (name === "telefone_alternativo") value = mascaraTelefone(value);
     if (name === "cep") value = mascaraCEP(value);
     if (name === "rg" || name === "coren_numero" || name === "orgao_emissor")
       value = value.toUpperCase();
@@ -452,6 +454,15 @@ export default function AdminEditar() {
                   <input
                     name="telefone"
                     value={formData.telefone}
+                    onChange={handleChange}
+                    className="input-padrao"
+                  />
+                </div>
+                <div>
+                  <label className="label-campo">Telefone Alternativo</label>
+                  <input
+                    name="telefone_alternativo"
+                    value={formData.telefone_alternativo || ""}
                     onChange={handleChange}
                     className="input-padrao"
                   />

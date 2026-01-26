@@ -236,6 +236,11 @@ export default function AdminDetalhes() {
               <p>
                 <strong>WhatsApp:</strong> {prestador.telefone}
               </p>
+              {prestador.telefone_alternativo && (
+                <p>
+                  <strong>Telefone Alternativo:</strong> {prestador.telefone_alternativo}
+                </p>
+              )}
               <p>
                 <strong>Endereço:</strong> {prestador.logradouro},{" "}
                 {prestador.numero} - {prestador.bairro}

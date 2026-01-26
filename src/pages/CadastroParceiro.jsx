@@ -14,6 +14,7 @@ export default function CadastroParceiro() {
     rg: "",
     email: "",
     telefone: "",
+    telefone_alternativo: "",
     estado_civil: "",
     cnpj: "",
     chave_pix: "",
@@ -76,6 +77,7 @@ export default function CadastroParceiro() {
     if (name === "cpf") value = mascaraCPF(value);
     if (name === "cnpj") value = mascaraCNPJ(value);
     if (name === "telefone") value = mascaraTelefone(value);
+    if (name === "telefone_alternativo") value = mascaraTelefone(value);
     if (name === "cep") value = mascaraCEP(value);
     if (name === "rg" || name === "coren_numero") value = value.toUpperCase();
     setFormData({ ...formData, [name]: value });
@@ -152,6 +154,9 @@ export default function CadastroParceiro() {
         cnpj: formData.cnpj ? formData.cnpj.replace(/\D/g, "") : "",
         cep: formData.cep.replace(/\D/g, ""),
         telefone: `+55${formData.telefone.replace(/\D/g, "")}`,
+        telefone_alternativo: formData.telefone_alternativo
+          ? `+55${formData.telefone_alternativo.replace(/\D/g, "")}`
+          : null,
       };
 
       const linksIdentidade = await uploadMultiplos(
@@ -174,7 +179,7 @@ export default function CadastroParceiro() {
           ...dadosLimpos,
           endereco_completo: enderecoFormatado,
           doc_identidade_url: linksIdentidade,
-          doc_cartao_cnpj_url: linksCnpj, // Pode ser null se não tiver arquivo
+          doc_cartao_cnpj_url: linksCnpj, 
           doc_comprovante_endereco_url: linksEndereco,
           doc_coren_url: linksCoren,
           status: "pendente",
@@ -271,6 +276,13 @@ export default function CadastroParceiro() {
                 placeholder="WhatsApp"
                 onChange={handleChange}
                 required
+                className="input-padrao"
+              />
+              <input
+                name="telefone_alternativo"
+                value={formData.telefone_alternativo}
+                placeholder="Telefone Alternativo (Opcional)"
+                onChange={handleChange}
                 className="input-padrao"
               />
               <input
