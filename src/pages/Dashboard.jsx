@@ -9,6 +9,8 @@ import {
   Calendar,
   Inbox,
   Landmark,
+  ArrowRight,
+  Activity,
 } from "lucide-react";
 
 export default function Dashboard() {
@@ -38,114 +40,145 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-paper p-8 flex flex-col items-center">
-      <div className="w-full max-w-6xl flex justify-end mb-4">
+    <div className="min-h-screen bg-gray-50/50 p-8 animate-in fade-in duration-500">
+      {/* HEADER + BOTÃO SAIR */}
+      <div className="max-w-7xl mx-auto mb-10 mt-2 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
+            <Activity className="text-primary" />
+            Portal Angels
+          </h1>
+          <p className="text-gray-500 mt-1 text-sm">
+            Gestão Administrativa Integrada
+          </p>
+        </div>
+
         <button
           onClick={handleLogout}
-          className="flex items-center gap-2 text-red-500 hover:text-red-700 hover:bg-red-50 px-4 py-2 rounded-lg transition-colors font-bold text-sm"
+          className="flex items-center gap-2 text-red-600 bg-red-50 hover:bg-red-100 px-4 py-2.5 rounded-xl transition-colors font-bold text-sm border border-red-100 shadow-sm"
         >
           <LogOut size={18} /> Sair do Sistema
         </button>
       </div>
 
-      <h1 className="text-4xl font-serif text-primary font-bold mb-2">
-        Portal Angels
-      </h1>
-      <p className="text-darkText/60 mb-12">Gestão Administrativa</p>
+      <div className="max-w-7xl mx-auto space-y-8">
+        <section>
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+              Operacional
+            </h2>
+            <div className="h-[1px] bg-gray-200 flex-1"></div>
+          </div>
 
-      <div className="grid md:grid-cols-3 gap-6 max-w-6xl w-full">
-        <Link
-          to="/admin/funcionarios"
-          className="bg-white p-8 rounded-2xl shadow-md border border-beige hover:shadow-xl hover:-translate-y-1 transition-all group"
-        >
-          <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-6 group-hover:bg-blue-100 transition-colors">
-            <Users className="w-8 h-8 text-blue-600" />
-          </div>
-          <h2 className="text-2xl font-serif text-primary font-bold mb-2">
-            Prestadores
-          </h2>
-          <p className="text-darkText/70">
-            Gerencie sua rede de parceiros MEI e cuidadores.
-          </p>
-        </Link>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <DashboardCard
+              to="/admin/funcionarios"
+              icon={<Users size={24} className="text-blue-600" />}
+              bgIcon="bg-blue-50"
+              title="Prestadores"
+              desc="Gerencie sua rede de parceiros."
+            />
 
-        <Link
-          to="/admin/funcionarios/novo"
-          className="bg-white p-8 rounded-2xl shadow-md border border-beige hover:shadow-xl hover:-translate-y-1 transition-all group"
-        >
-          <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mb-6 group-hover:bg-green-100 transition-colors">
-            <UserPlus className="w-8 h-8 text-green-600" />
-          </div>
-          <h2 className="text-2xl font-serif text-primary font-bold mb-2">
-            Novo Parceiro
-          </h2>
-          <p className="text-darkText/70">
-            Cadastre um novo profissional na base manualmente.
-          </p>
-        </Link>
+            <DashboardCard
+              to="/admin/funcionarios/novo"
+              icon={<UserPlus size={24} className="text-emerald-600" />}
+              bgIcon="bg-emerald-50"
+              title="Novo Parceiro"
+              desc="Cadastrar profissional manualmente."
+            />
 
-        <Link
-          to="/admin/pacientes"
-          className="bg-white p-8 rounded-2xl shadow-md border border-beige hover:shadow-xl hover:-translate-y-1 transition-all group"
-        >
-          <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-6 group-hover:bg-red-100 transition-colors">
-            <HeartPulse className="w-8 h-8 text-red-500" />
-          </div>
-          <h2 className="text-2xl font-serif text-primary font-bold mb-2">
-            Pacientes
-          </h2>
-          <p className="text-darkText/70">
-            Prontuários, endereços e responsáveis familiares.
-          </p>
-        </Link>
-        <Link
-          to="/admin/escalas"
-          className="bg-white p-8 rounded-2xl shadow-md border border-beige hover:shadow-xl hover:-translate-y-1 transition-all group"
-        >
-          <div className="w-16 h-16 bg-purple-50 rounded-full flex items-center justify-center mb-6 group-hover:bg-purple-100 transition-colors">
-            <Calendar className="w-8 h-8 text-purple-600" />
-          </div>
-          <h2 className="text-2xl font-serif text-primary font-bold mb-2">
-            Escalas
-          </h2>
-          <p className="text-darkText/70">
-            Mapa geral de plantões e confirmação de presença.
-          </p>
-        </Link>
+            <DashboardCard
+              to="/admin/pacientes"
+              icon={<HeartPulse size={24} className="text-rose-600" />}
+              bgIcon="bg-rose-50"
+              title="Pacientes"
+              desc="Prontuários e responsáveis."
+            />
 
-        <Link
-          to="/admin/candidatos"
-          className="bg-white p-8 rounded-2xl shadow-md border-2 border-blue-200 hover:border-blue-400 hover:shadow-xl hover:-translate-y-1 transition-all group relative overflow-hidden"
-        >
-          {candidatosCount > 0 && (
-            <div className="absolute top-4 right-4 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-full animate-pulse shadow-sm">
-              {candidatosCount} Novos
-            </div>
-          )}
-          <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-6 group-hover:bg-blue-100 transition-colors">
-            <Inbox className="w-8 h-8 text-blue-600" />
+            <DashboardCard
+              to="/admin/escalas"
+              icon={<Calendar size={24} className="text-purple-600" />}
+              bgIcon="bg-purple-50"
+              title="Escalas"
+              desc="Mapa geral de plantões."
+            />
           </div>
-          <h2 className="text-2xl font-serif text-primary font-bold mb-2">
-            Banco de Talentos
-          </h2>
-          <p className="text-darkText/70">
-            Currículos recebidos pelo site (Trabalhe Conosco).
-          </p>
-        </Link>
+        </section>
 
-        <Link
-          to="/admin/financeiro"
-          className="bg-white p-8 rounded-2xl shadow-md border-2 border-green-200 hover:border-green-400 hover:shadow-xl hover:-translate-y-1 transition-all group relative overflow-hidden"
-        >
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-6 group-hover:bg-blue-100 transition-colors">
-            <Landmark className="w-8 h-8 text-green-700" />
+        <section>
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+              Administrativo
+            </h2>
+            <div className="h-[1px] bg-gray-200 flex-1"></div>
           </div>
-          <h2 className="text-2xl font-serif text-primary font-bold mb-2">
-            Financeiro
-          </h2>
-          <p className="text-darkText/70">Área financeira</p>
-        </Link>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <DashboardCard
+              to="/admin/candidatos"
+              icon={<Inbox size={24} className="text-sky-600" />}
+              bgIcon="bg-sky-50"
+              title="Banco de Talentos"
+              desc="Currículos do site."
+              badge={candidatosCount}
+            />
+
+            <DashboardCard
+              to="/admin/financeiro"
+              icon={<Landmark size={24} className="text-amber-600" />}
+              bgIcon="bg-amber-50"
+              title="Financeiro"
+              desc="Área financeira e caixa."
+              highlight={true}
+            />
+          </div>
+        </section>
       </div>
     </div>
+  );
+}
+
+function DashboardCard({
+  to,
+  icon,
+  bgIcon,
+  title,
+  desc,
+  highlight = false,
+  badge = 0,
+}) {
+  return (
+    <Link
+      to={to}
+      className={`
+                relative overflow-hidden bg-white p-6 rounded-2xl border transition-all duration-300
+                hover:shadow-lg hover:-translate-y-1 group flex flex-col justify-between min-h-[140px]
+                ${highlight ? "border-amber-200 ring-4 ring-amber-50/30" : "border-gray-100"}
+            `}
+    >
+      {badge > 0 && (
+        <div className="absolute top-4 right-4 bg-blue-500 text-white text-[10px] font-bold px-2 py-1 rounded-full animate-pulse shadow-sm z-10">
+          {badge} NOVOS
+        </div>
+      )}
+
+      <div className="flex justify-between items-start mb-3">
+        <div
+          className={`w-12 h-12 ${bgIcon} rounded-xl flex items-center justify-center transition-transform group-hover:scale-110`}
+        >
+          {icon}
+        </div>
+        <div className="text-gray-300 group-hover:text-primary transition-colors transform translate-x-2 opacity-0 group-hover:opacity-100 group-hover:translate-x-0 duration-300">
+          <ArrowRight size={20} />
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-lg font-bold text-gray-800 mb-1 group-hover:text-primary transition-colors">
+          {title}
+        </h3>
+        <p className="text-sm text-gray-500 leading-snug">{desc}</p>
+      </div>
+    </Link>
   );
 }
