@@ -3,16 +3,15 @@ import { supabase } from "../../lib/supabase";
 import {
   Plus,
   Search,
-  FileText,
   Printer,
   Trash2,
   Edit,
   CheckCircle,
   XCircle,
   Clock,
-  Eye,
 } from "lucide-react";
 import NovoOrcamentoModal from "../../components/financeiro/NovoOrcamentoModal";
+import { gerarPropostaDocx } from "../../utils/gerarPropostaDocx";
 
 export default function Orcamentos() {
   const [orcamentos, setOrcamentos] = useState([]);
@@ -58,6 +57,10 @@ export default function Orcamentos() {
     setModalOpen(true);
   };
 
+  const handlePrint = (item) => {
+    gerarPdfOrcamento(item);
+  };
+
   const filtered = orcamentos.filter(
     (item) =>
       item.descricao?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -66,35 +69,23 @@ export default function Orcamentos() {
         .includes(searchTerm.toLowerCase()),
   );
 
-  const formatMoney = (val) =>
-    new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(val);
-
   const getStatusBadge = (status) => {
     switch (status) {
       case "aprovado":
         return (
-          <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-bold border border-green-200 flex items-center gap-1 w-fit">
+          <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-bold flex items-center gap-1 w-fit">
             <CheckCircle size={12} /> Aprovado
           </span>
         );
       case "rejeitado":
         return (
-          <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-bold border border-red-200 flex items-center gap-1 w-fit">
+          <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-bold flex items-center gap-1 w-fit">
             <XCircle size={12} /> Rejeitado
-          </span>
-        );
-      case "finalizado":
-        return (
-          <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-bold border border-blue-200 flex items-center gap-1 w-fit">
-            <CheckCircle size={12} /> Finalizado
           </span>
         );
       default:
         return (
-          <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded text-xs font-bold border border-yellow-200 flex items-center gap-1 w-fit">
+          <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded text-xs font-bold flex items-center gap-1 w-fit">
             <Clock size={12} /> Pendente
           </span>
         );
@@ -118,7 +109,7 @@ export default function Orcamentos() {
           <Search size={18} className="text-gray-400 mr-2" />
           <input
             type="text"
-            placeholder="Pesquisar por cliente ou descrição..."
+            placeholder="Pesquisar..."
             className="bg-transparent w-full py-2 outline-none text-sm text-gray-700"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -130,24 +121,23 @@ export default function Orcamentos() {
         <table className="w-full text-left border-collapse">
           <thead className="bg-gray-50">
             <tr className="border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-wider">
-              <th className="p-4">Data</th>
+              <th className="p-4">Nº Proposta</th>
               <th className="p-4">Cliente</th>
-              <th className="p-4">Descrição</th>
+              <th className="p-4">Emissão</th>
               <th className="p-4 text-center">Status</th>
-              <th className="p-4 text-right">Total</th>
               <th className="p-4 text-center">Ações</th>
             </tr>
           </thead>
           <tbody className="text-sm">
             {loading ? (
               <tr>
-                <td colSpan="6" className="p-8 text-center text-gray-400">
+                <td colSpan="5" className="p-8 text-center text-gray-400">
                   Carregando...
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan="6" className="p-8 text-center text-gray-400">
+                <td colSpan="5" className="p-8 text-center text-gray-400">
                   Nenhum orçamento encontrado.
                 </td>
               </tr>
@@ -157,30 +147,24 @@ export default function Orcamentos() {
                   key={item.id}
                   className="border-b border-gray-50 hover:bg-gray-50 transition-colors"
                 >
-                  <td className="p-4 text-gray-600 font-mono text-xs">
-                    {new Date(item.data_emissao).toLocaleDateString("pt-BR")}
+                  <td className="p-4 font-mono font-bold text-primary">
+                    {item.numero_orcamento || "---"}
                   </td>
                   <td className="p-4 font-bold text-gray-800">
                     {item.financeiro_entidades?.nome || "Cliente Removido"}
                   </td>
                   <td className="p-4 text-gray-600">
-                    {item.descricao}
-                    <span className="block text-[10px] text-gray-400">
-                      Validade:{" "}
-                      {new Date(item.data_validade).toLocaleDateString("pt-BR")}
-                    </span>
+                    {new Date(item.data_emissao).toLocaleDateString("pt-BR")}
                   </td>
                   <td className="p-4 flex justify-center">
                     {getStatusBadge(item.status)}
                   </td>
-                  <td className="p-4 text-right font-bold text-gray-800">
-                    {formatMoney(item.valor_total)}
-                  </td>
                   <td className="p-4">
                     <div className="flex justify-center gap-2">
                       <button
+                        onClick={() => gerarPropostaDocx(item)} 
                         className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
-                        title="Imprimir/PDF"
+                        title="Baixar Proposta (Word)"
                       >
                         <Printer size={16} />
                       </button>
