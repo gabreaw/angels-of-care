@@ -266,7 +266,6 @@ export default function NovoOrcamentoModal({
                 </div>
               </div>
             </div>
-
             <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex flex-col md:flex-row gap-4 items-center">
               <div className="flex-1 w-full">
                 <label className="text-xs font-bold text-blue-700 uppercase mb-1 block">
