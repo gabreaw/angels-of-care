@@ -99,7 +99,6 @@ export default function NovoOrcamentoModal({
       });
     }
 
-    // O próximo é o maior encontrado + 1 (Se o maior for 26, gera 27)
     const proximo = maiorNumero + 1;
     setFormData((prev) => ({
       ...prev,
