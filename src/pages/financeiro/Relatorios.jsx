@@ -35,8 +35,7 @@ const COLORS = [
 export default function Relatorios() {
   const [loading, setLoading] = useState(true);
 
-  // Estado do filtro (Padrão: Mês Atual)
-  const [mesAno, setMesAno] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const [mesAno, setMesAno] = useState(new Date().toISOString().slice(0, 7)); 
 
   const [resumo, setResumo] = useState({
     receitas: 0,
@@ -57,15 +56,10 @@ export default function Relatorios() {
 
     const [ano, mes] = mesAno.split("-");
 
-    // --- LÓGICA MENSAL (Cards e Pizza) ---
-    // Define o intervalo exato do mês selecionado
-    // Importante: Usamos string direta YYYY-MM-DD para evitar conversão de fuso indesejada
     const dataInicioMes = `${ano}-${mes}-01`;
-    // Pega o último dia do mês corretamente
     const ultimoDia = new Date(parseInt(ano), parseInt(mes), 0).getDate();
     const dataFimMes = `${ano}-${mes}-${ultimoDia}`;
 
-    // Busca apenas dados deste mês específico
     const { data: dadosMes, error: errorMes } = await supabase
       .from("financeiro_transacoes")
       .select(
@@ -73,11 +67,12 @@ export default function Relatorios() {
         tipo, 
         valor, 
         status, 
+        data_competencia,
+        data_pagamento,
+        data_vencimento,
         financeiro_categorias (nome)
       `,
-      )
-      .gte("data_competencia", dataInicioMes)
-      .lte("data_competencia", dataFimMes);
+      );
 
     if (errorMes) {
       console.error(errorMes);
@@ -85,13 +80,27 @@ export default function Relatorios() {
       return;
     }
 
-    // Processamento dos Cards (KPIs)
+    const dadosMesFiltrados = (dadosMes || []).filter((t) => {
+      const dataBase =
+        t.data_competencia ||
+        t.data_pagamento ||
+        t.data_vencimento;
+
+      if (!dataBase) return false;
+
+      const data = new Date(dataBase);
+      const anoTransacao = data.getFullYear().toString();
+      const mesTransacao = (data.getMonth() + 1).toString().padStart(2, "0");
+
+      return anoTransacao === ano && mesTransacao === mes;
+    });
+
     let totalReceitas = 0;
     let totalDespesas = 0;
     let totalPendente = 0;
     const categoriasMap = {};
 
-    dadosMes.forEach((t) => {
+    dadosMesFiltrados.forEach((t) => {
       const valor = Number(t.valor);
 
       if (t.tipo === "receita") {
@@ -99,7 +108,6 @@ export default function Relatorios() {
       } else {
         totalDespesas += valor;
 
-        // Agrupamento para Pizza (Despesas)
         const nomeCat = t.financeiro_categorias?.nome || "Sem Categoria";
         if (!categoriasMap[nomeCat]) categoriasMap[nomeCat] = 0;
         categoriasMap[nomeCat] += valor;
@@ -117,23 +125,18 @@ export default function Relatorios() {
       pendente: totalPendente,
     });
 
-    // Dados Pizza
     const pizzaData = Object.keys(categoriasMap)
       .map((key) => ({ name: key, value: categoriasMap[key] }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
     setDadosGraficoPizza(pizzaData);
 
-    // --- LÓGICA ANUAL (Gráfico de Barras) ---
-    // Busca o ano todo para mostrar a evolução
     const inicioAno = `${ano}-01-01`;
     const fimAno = `${ano}-12-31`;
 
     const { data: dadosAno, error: errorAno } = await supabase
       .from("financeiro_transacoes")
-      .select("tipo, valor, data_competencia")
-      .gte("data_competencia", inicioAno)
-      .lte("data_competencia", fimAno);
+      .select("tipo, valor, data_competencia, data_pagamento, data_vencimento");
 
     if (!errorAno && dadosAno) {
       const meses = [
@@ -152,13 +155,20 @@ export default function Relatorios() {
       ];
 
       const barraData = meses.map((nomeMes, index) => {
-        const mesNumero = index + 1; // 1 a 12
+        const mesNumero = index + 1;
 
-        const transacoesDoMes = dadosAno.filter((t) => {
-          // Extrai o mês da string YYYY-MM-DD de forma segura
-          // Ex: "2026-05-15" -> split("-")[1] -> "05" -> parseInt -> 5
-          const mesTransacao = parseInt(t.data_competencia.split("-")[1], 10);
-          return mesTransacao === mesNumero;
+        const transacoesDoMes = (dadosAno || []).filter((t) => {
+          const dataBase =
+            t.data_competencia ||
+            t.data_pagamento ||
+            t.data_vencimento;
+
+          if (!dataBase) return false;
+
+          const data = new Date(dataBase);
+          const mesTransacao = data.getMonth() + 1;
+
+          return mesTransacao === mesNumero && data.getFullYear().toString() === ano;
         });
 
         const rec = transacoesDoMes
@@ -220,7 +230,6 @@ export default function Relatorios() {
         </div>
       </div>
 
-      {/* Cards KPI - Dados Mensais */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between relative overflow-hidden">
           <div className="absolute top-0 right-0 p-4 opacity-10">
@@ -266,7 +275,7 @@ export default function Relatorios() {
             <p className="text-sm font-medium text-white/80 mb-1">
               Resultado Líquido
             </p>
-            <h3 className="text-2xl font-bold">
+            <h3 className="text-2xl text-white font-bold">
               {loading ? "..." : formatMoney(resumo.saldo)}
             </h3>
           </div>
