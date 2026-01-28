@@ -22,7 +22,7 @@ export default function NovoContratoModal({
     dia_vencimento: "5",
     status: "ativo",
     observacoes: "",
-    arquivo_url: null,
+    anexos: [],
   });
 
   useEffect(() => {
@@ -65,30 +65,42 @@ export default function NovoContratoModal({
   };
 
   const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
 
     setUploading(true);
+
     try {
-      const fileExt = file.name.split(".").pop();
-      const fileName = `contrato-${Date.now()}.${fileExt}`;
-      const filePath = `contratos/${fileName}`;
+      const uploadedFiles = [];
 
-      const { error: uploadError } = await supabase.storage
-        .from("financeiro")
-        .upload(filePath, file);
+      for (const file of files) {
+        const filePath = `contratos/${Date.now()}-${file.name}`;
 
-      if (uploadError) throw uploadError;
+        const { error: uploadError } = await supabase.storage
+          .from("financeiro")
+          .upload(filePath, file);
 
-      const { data } = supabase.storage
-        .from("financeiro")
-        .getPublicUrl(filePath);
-      setFormData((prev) => ({ ...prev, arquivo_url: data.publicUrl }));
-      alert("Arquivo anexado!");
+        if (uploadError) throw uploadError;
+
+        const { data } = supabase.storage
+          .from("financeiro")
+          .getPublicUrl(filePath);
+
+        uploadedFiles.push({
+          nome: file.name,
+          url: data.publicUrl,
+        });
+      }
+
+      setFormData((prev) => ({
+        ...prev,
+        anexos: [...prev.anexos, ...uploadedFiles],
+      }));
     } catch (err) {
       alert("Erro no upload: " + err.message);
     } finally {
       setUploading(false);
+      e.target.value = "";
     }
   };
 
@@ -289,26 +301,37 @@ export default function NovoContratoModal({
               </label>
               <div
                 onClick={() => fileInputRef.current.click()}
-                className={`border-2 border-dashed ${formData.arquivo_url ? "border-green-300 bg-green-50" : "border-gray-300 hover:bg-gray-50"} rounded-lg p-4 text-center cursor-pointer transition-colors`}
+                className={`border-2 border-dashed ${
+                  formData.anexos.length > 0
+                    ? "border-green-300 bg-green-50"
+                    : "border-gray-300 hover:bg-gray-50"
+                } rounded-lg p-4 text-center cursor-pointer transition-colors`}
               >
                 {uploading ? (
                   <span className="flex items-center justify-center gap-2 text-sm text-gray-500">
-                    <Loader2 className="animate-spin" size={16} /> Enviando...
+                    <Loader2 className="animate-spin" size={16} /> Enviando arquivos...
                   </span>
-                ) : formData.arquivo_url ? (
-                  <span className="flex items-center justify-center gap-2 text-sm text-green-600 font-bold">
-                    <FileText size={16} /> Arquivo Anexado (Clique para trocar)
-                  </span>
+                ) : formData.anexos.length > 0 ? (
+                  <div className="text-sm text-green-700 font-semibold space-y-1">
+                    {formData.anexos.map((a, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <FileText size={14} /> {a.nome}
+                      </div>
+                    ))}
+                    <p className="text-xs text-green-600 mt-2">
+                      Clique para anexar mais arquivos
+                    </p>
+                  </div>
                 ) : (
                   <span className="flex items-center justify-center gap-2 text-sm text-gray-500">
-                    <Upload size={16} /> Clique para anexar PDF
+                    <Upload size={16} /> Clique para anexar arquivos
                   </span>
                 )}
                 <input
                   type="file"
                   ref={fileInputRef}
                   onChange={handleFileUpload}
-                  accept="application/pdf"
+                  multiple
                   className="hidden"
                 />
               </div>

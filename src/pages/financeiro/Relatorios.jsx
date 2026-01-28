@@ -81,14 +81,9 @@ export default function Relatorios() {
     }
 
     const dadosMesFiltrados = (dadosMes || []).filter((t) => {
-      const dataBase =
-        t.data_competencia ||
-        t.data_pagamento ||
-        t.data_vencimento;
+      if (!t.data_competencia) return false;
 
-      if (!dataBase) return false;
-
-      const data = new Date(dataBase);
+      const data = new Date(t.data_competencia);
       const anoTransacao = data.getFullYear().toString();
       const mesTransacao = (data.getMonth() + 1).toString().padStart(2, "0");
 
@@ -158,17 +153,13 @@ export default function Relatorios() {
         const mesNumero = index + 1;
 
         const transacoesDoMes = (dadosAno || []).filter((t) => {
-          const dataBase =
-            t.data_competencia ||
-            t.data_pagamento ||
-            t.data_vencimento;
+          if (!t.data_competencia) return false;
 
-          if (!dataBase) return false;
-
-          const data = new Date(dataBase);
+          const data = new Date(t.data_competencia);
           const mesTransacao = data.getMonth() + 1;
+          const anoTransacao = data.getFullYear().toString();
 
-          return mesTransacao === mesNumero && data.getFullYear().toString() === ano;
+          return mesTransacao === mesNumero && anoTransacao === ano;
         });
 
         const rec = transacoesDoMes

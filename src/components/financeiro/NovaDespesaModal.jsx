@@ -55,6 +55,10 @@ export default function NovaDespesaModal({
     observacoes: "",
     anexo_urls: [],
   });
+  const [usarRateio, setUsarRateio] = useState(false);
+  const [rateios, setRateios] = useState([
+    { conta_id: "", valor: "", percentual: "" },
+  ]);
 
   useEffect(() => {
     fetchData();
@@ -174,8 +178,62 @@ export default function NovaDespesaModal({
     }));
   };
 
+  const validarRateio = () => {
+    if (!usarRateio) return true;
+
+    const valorTotal = parseFloat(
+      String(formData.valor).replace(/[^\d,]/g, "").replace(",", ".")
+    );
+
+    let somaValor = 0;
+    let somaPercentual = 0;
+
+    for (const r of rateios) {
+      if (!r.conta_id) return "Selecione todas as contas do rateio";
+
+      if (r.valor) {
+        somaValor += parseFloat(
+          String(r.valor).replace(/[^\d,]/g, "").replace(",", ".")
+        );
+      }
+      if (r.percentual) somaPercentual += parseFloat(r.percentual);
+    }
+
+    if (somaValor > 0 && somaPercentual > 0)
+      return "Use apenas valor OU percentual no rateio";
+
+    if (somaValor > 0 && Math.abs(somaValor - valorTotal) > 0.01)
+      return "A soma dos valores do rateio não fecha com o total";
+
+    if (somaPercentual > 0 && Math.abs(somaPercentual - 100) > 0.01)
+      return "A soma dos percentuais deve ser 100%";
+
+    return true;
+  };
+
+  const adicionarRateio = () => {
+    setRateios([...rateios, { conta_id: "", valor: "", percentual: "" }]);
+  };
+
+  const removerRateio = (index) => {
+    setRateios(rateios.filter((_, i) => i !== index));
+  };
+
+  const updateRateio = (index, campo, valor) => {
+    const novo = [...rateios];
+    novo[index][campo] = valor;
+    if (campo === "valor") novo[index].percentual = "";
+    if (campo === "percentual") novo[index].valor = "";
+    setRateios(novo);
+  };
+
   const handlePreSubmit = (e) => {
     e.preventDefault();
+    const valid = validarRateio();
+    if (valid !== true) {
+      alert(valid);
+      return;
+    }
     if (despesaParaEditar && despesaParaEditar.recorrencia_id) {
       setShowRecorrenciaOptions(true);
     } else {
@@ -327,11 +385,36 @@ export default function NovaDespesaModal({
           });
         }
 
-        const { error } = await supabase
+        const { data: transacoesCriadas, error } = await supabase
           .from("financeiro_transacoes")
-          .insert(lancamentos);
+          .insert(lancamentos)
+          .select("id");
+
         if (error) throw error;
+
+        const transacaoPrincipalId = transacoesCriadas?.[0]?.id;
         alert("Despesa salva!");
+      }
+
+      if (usarRateio) {
+        const transacaoIdParaRateio = despesaParaEditar
+          ? despesaParaEditar.id
+          : transacaoPrincipalId;
+
+        if (!transacaoIdParaRateio) {
+          throw new Error("Não foi possível identificar a transação para rateio");
+        }
+
+        const rateiosPayload = rateios.map((r) => ({
+          transacao_id: transacaoIdParaRateio,
+          conta_id: r.conta_id,
+          valor: r.valor
+            ? parseFloat(String(r.valor).replace(/[^\d,]/g, "").replace(",", "."))
+            : null,
+          percentual: r.percentual ? parseFloat(r.percentual) : null,
+        }));
+
+        await supabase.from("financeiro_rateios").insert(rateiosPayload);
       }
 
       onSuccess();
@@ -685,6 +768,76 @@ export default function NovaDespesaModal({
                     </label>
                   </div>
                 </div>
+              </section>
+
+              {/* Rateio UI */}
+              <section className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <label className="flex items-center gap-2 text-sm font-bold mb-4">
+                  <input
+                    type="checkbox"
+                    checked={usarRateio}
+                    onChange={(e) => setUsarRateio(e.target.checked)}
+                    className="accent-green-600"
+                  />
+                  Ratear despesa entre contas
+                </label>
+
+                {usarRateio && (
+                  <div className="space-y-3 bg-gray-50 p-4 rounded-lg border">
+                    {rateios.map((r, index) => (
+                      <div key={index} className="grid grid-cols-12 gap-2 items-center">
+                        <select
+                          className="col-span-5 p-2 border rounded"
+                          value={r.conta_id}
+                          onChange={(e) =>
+                            updateRateio(index, "conta_id", e.target.value)
+                          }
+                        >
+                          <option value="">Conta</option>
+                          {contas.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.nome}
+                            </option>
+                          ))}
+                        </select>
+
+                        <input
+                          className="col-span-3 p-2 border rounded text-right"
+                          placeholder="Valor"
+                          value={r.valor}
+                          onChange={(e) =>
+                            updateRateio(index, "valor", e.target.value)
+                          }
+                        />
+
+                        <input
+                          className="col-span-3 p-2 border rounded text-right"
+                          placeholder="%"
+                          value={r.percentual}
+                          onChange={(e) =>
+                            updateRateio(index, "percentual", e.target.value)
+                          }
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() => removerRateio(index)}
+                          className="col-span-1 text-red-500 font-bold"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+
+                    <button
+                      type="button"
+                      onClick={adicionarRateio}
+                      className="text-sm font-bold text-blue-600"
+                    >
+                      + Adicionar conta
+                    </button>
+                  </div>
+                )}
               </section>
 
               {/* Seção de Anexos VISUAL (Melhorada) */}
