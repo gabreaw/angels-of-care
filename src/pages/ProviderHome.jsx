@@ -9,11 +9,15 @@ import {
   User,
   ChevronRight,
   Stethoscope,
+  AlertTriangle,
+  CheckCircle,
+  PlayCircle,
 } from "lucide-react";
 
 export default function ProviderHome() {
   const navigate = useNavigate();
   const [usuario, setUsuario] = useState(null);
+  const [plantaoAtivo, setPlantaoAtivo] = useState(null); 
   const [proximoPlantao, setProximoPlantao] = useState(null);
   const [meusPacientes, setMeusPacientes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,15 +35,20 @@ export default function ProviderHome() {
 
       const { data: func } = await supabase
         .from("funcionarios")
-        .select("id, nome_completo")
+        .select("id, nome_completo, status")
         .eq("auth_id", user.id)
         .single();
+
+      if (!func || func.status !== "ativo") {
+        alert("Seu acesso está inativo. Contate o administrador.");
+        await supabase.auth.signOut();
+        return navigate("/login");
+      }
 
       setUsuario(func);
 
       if (func) {
         const agora = new Date();
-
         const hoje = agora.toLocaleDateString("sv-SE", {
           timeZone: "America/Sao_Paulo",
         });
@@ -50,7 +59,7 @@ export default function ProviderHome() {
           minute: "2-digit",
         });
 
-        const { data: prox } = await supabase
+        const { data: plantoes } = await supabase
           .from("plantoes")
           .select(
             `
@@ -58,48 +67,39 @@ export default function ProviderHome() {
             data_plantao, 
             horario_inicio, 
             horario_fim, 
-            pacientes (id, nome_paciente, endereco_completo)
+            pacientes (id, nome_paciente, endereco_completo, diagnostico, grau_dependencia)
           `,
           )
           .eq("funcionario_id", func.id)
           .gte("data_plantao", hoje)
           .order("data_plantao", { ascending: true })
-          .order("horario_inicio", { ascending: true })
-          .limit(10); 
+          .order("horario_inicio", { ascending: true });
 
-        let nextShift = null;
-        if (prox && prox.length > 0) {
-          nextShift = prox.find((p) => {
+        if (plantoes) {
+          const active = plantoes.find(
+            (p) =>
+              p.data_plantao === hoje &&
+              p.horario_inicio <= horaAtual &&
+              p.horario_fim > horaAtual,
+          );
+          setPlantaoAtivo(active || null);
+
+          const next = plantoes.find((p) => {
             if (p.data_plantao > hoje) return true;
-            if (p.data_plantao === hoje && p.horario_fim > horaAtual) {
+            if (p.data_plantao === hoje && p.horario_inicio > horaAtual)
               return true;
-            }
             return false;
           });
-        }
+          setProximoPlantao(next || null);
 
-        setProximoPlantao(nextShift || null);
-
-        const { data: plantoesFuturos } = await supabase
-          .from("plantoes")
-          .select(
-            `
-            pacientes (id, nome_paciente, endereco_completo, diagnostico, grau_dependencia)
-          `,
-          )
-          .eq("funcionario_id", func.id)
-          .gte("data_plantao", hoje) 
-          .order("data_plantao", { ascending: true });
-
-        const pacientesMap = new Map();
-        if (plantoesFuturos) {
-          plantoesFuturos.forEach((p) => {
+          const pacientesMap = new Map();
+          plantoes.forEach((p) => {
             if (p.pacientes) {
               pacientesMap.set(p.pacientes.id, p.pacientes);
             }
           });
+          setMeusPacientes(Array.from(pacientesMap.values()));
         }
-        setMeusPacientes(Array.from(pacientesMap.values()));
       }
     } catch (error) {
       console.error("Erro ao buscar dados:", error);
@@ -138,9 +138,35 @@ export default function ProviderHome() {
             <LogOut size={20} />
           </button>
         </div>
-
         {loading ? (
           <div className="h-24 bg-white/10 rounded-2xl animate-pulse"></div>
+        ) : plantaoAtivo ? (
+          <div className="bg-green-600/90 backdrop-blur-md border border-green-400/30 p-5 rounded-2xl text-white shadow-lg relative overflow-hidden group animate-in fade-in zoom-in duration-300">
+            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+              <PlayCircle size={80} />
+            </div>
+
+            <div className="flex items-center gap-2 mb-3">
+              <span className="bg-white text-green-700 text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>{" "}
+                Em Andamento
+              </span>
+            </div>
+
+            <h2 className="text-2xl font-bold mb-1 truncate pr-8">
+              {plantaoAtivo.pacientes?.nome_paciente}
+            </h2>
+            <p className="opacity-90 text-sm mb-4 flex items-center gap-1">
+              <Clock size={14} /> Até às {plantaoAtivo.horario_fim.slice(0, 5)}
+            </p>
+
+            <Link
+              to={`/app/pacientes/${plantaoAtivo.pacientes.id}`}
+              className="w-full bg-white text-green-700 font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-sm hover:bg-green-50 transition-colors"
+            >
+              Acessar Prontuário Agora <ChevronRight size={18} />
+            </Link>
+          </div>
         ) : proximoPlantao ? (
           <div className="bg-white/10 backdrop-blur-md border border-white/20 p-5 rounded-2xl text-white shadow-lg relative overflow-hidden group">
             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
@@ -148,7 +174,6 @@ export default function ProviderHome() {
             </div>
 
             <div className="flex items-center gap-2 mb-3 opacity-90 text-xs font-bold uppercase tracking-wider">
-              <span className="bg-green-500 w-2 h-2 rounded-full animate-pulse"></span>
               Próximo Compromisso
             </div>
 
@@ -176,21 +201,18 @@ export default function ProviderHome() {
           <div className="bg-white/10 backdrop-blur-md border border-white/20 p-6 rounded-2xl text-white text-center">
             <Calendar className="mx-auto mb-2 opacity-50" size={32} />
             <p className="opacity-90 font-medium">Agenda livre por enquanto.</p>
-            <p className="text-xs opacity-60">
-              Nenhum plantão futuro encontrado.
-            </p>
           </div>
         )}
       </div>
 
-      <div className="px-6 -mt-6 relative z-20 space-y-4">
+      <div className="px-6 -mt-6 relative z-20 space-y-6">
         {loading ? (
           <div className="text-center text-gray-400 mt-10">
             Carregando dados...
           </div>
         ) : meusPacientes.length > 0 ? (
           <>
-            <h3 className="font-bold text-darkText mt-8 mb-2 ml-1 text-lg flex items-center gap-2">
+            <h3 className="font-bold text-darkText mt-2 ml-1 text-lg flex items-center gap-2">
               <User size={18} className="text-primary" /> Meus Pacientes
             </h3>
 
@@ -198,11 +220,21 @@ export default function ProviderHome() {
               {meusPacientes.map((paciente) => (
                 <div
                   key={paciente.id}
-                  className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all group"
+                  className={`bg-white p-5 rounded-2xl shadow-sm border transition-all group ${
+                    plantaoAtivo?.pacientes?.id === paciente.id
+                      ? "border-green-200 ring-1 ring-green-100"
+                      : "border-gray-100 hover:shadow-md"
+                  }`}
                 >
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex items-center gap-3">
-                      <div className="bg-sage/10 text-primary w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg border border-sage/20">
+                      <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg border ${
+                          plantaoAtivo?.pacientes?.id === paciente.id
+                            ? "bg-green-100 text-green-700 border-green-200"
+                            : "bg-sage/10 text-primary border-sage/20"
+                        }`}
+                      >
                         {paciente.nome_paciente.charAt(0)}
                       </div>
                       <div>
@@ -223,25 +255,20 @@ export default function ProviderHome() {
                         {paciente.endereco_completo}
                       </p>
                     </div>
-                    {paciente.diagnostico && (
-                      <div className="flex items-start gap-2">
-                        <Stethoscope
-                          size={16}
-                          className="text-sage mt-0.5 shrink-0"
-                        />
-                        <p className="line-clamp-1 text-xs italic opacity-80">
-                          {paciente.diagnostico}
-                        </p>
-                      </div>
-                    )}
                   </div>
-
                   <div className="pt-3 border-t border-gray-50">
                     <Link
                       to={`/app/pacientes/${paciente.id}`}
-                      className="w-full bg-primary/5 hover:bg-primary hover:text-white text-primary font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all text-sm group-hover:translate-x-1"
+                      className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 transition-all text-sm font-bold ${
+                        plantaoAtivo?.pacientes?.id === paciente.id
+                          ? "bg-green-600 text-white hover:bg-green-700 shadow-md"
+                          : "bg-gray-100 text-gray-600 hover:bg-primary hover:text-white"
+                      }`}
                     >
-                      Acessar Prontuário <ChevronRight size={16} />
+                      {plantaoAtivo?.pacientes?.id === paciente.id
+                        ? "Acessar Prontuário"
+                        : "Ver Detalhes"}{" "}
+                      <ChevronRight size={16} />
                     </Link>
                   </div>
                 </div>

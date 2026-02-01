@@ -11,13 +11,15 @@ import {
   X,
   Save,
   ExternalLink,
+  ShieldAlert,
 } from "lucide-react";
 
 export default function ProviderPaciente() {
-  const { id } = useParams();
+  const { id } = useParams(); 
   const navigate = useNavigate();
   const [paciente, setPaciente] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [erroPermissao, setErroPermissao] = useState(null);
   const [activeTab, setActiveTab] = useState("evolucao");
   const [uploading, setUploading] = useState(false);
   const [evolucoes, setEvolucoes] = useState([]);
@@ -36,11 +38,44 @@ export default function ProviderPaciente() {
   });
 
   useEffect(() => {
-    fetchDados();
+    verificarAcessoEBuscarDados();
   }, [id]);
 
-  async function fetchDados() {
+  async function verificarAcessoEBuscarDados() {
     try {
+      setLoading(true);
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return navigate("/login");
+
+      const { data: func } = await supabase
+        .from("funcionarios")
+        .select("id, status, nome_completo")
+        .eq("auth_id", user.id)
+        .single();
+
+      if (!func || func.status !== "ativo") {
+        await supabase.auth.signOut();
+        alert("Seu acesso foi revogado.");
+        return navigate("/login");
+      }
+
+      const { count } = await supabase
+        .from("plantoes")
+        .select("id", { count: "exact", head: true })
+        .eq("funcionario_id", func.id)
+        .eq("paciente_id", id);
+
+      if (count === 0) {
+        setErroPermissao(
+          "Você não possui vínculo com este paciente na sua escala.",
+        );
+        setLoading(false);
+        return;
+      }
+
       const { data: pac, error } = await supabase
         .from("pacientes")
         .select("*")
@@ -49,15 +84,17 @@ export default function ProviderPaciente() {
 
       if (error) throw error;
       setPaciente(pac);
-      fetchEvolucoes();
 
+      // Busca evoluções e meds
+      fetchEvolucoes();
       const { data: meds } = await supabase
         .from("medicamentos")
         .select("*")
         .eq("paciente_id", id);
       setMedicamentos(meds || []);
     } catch (error) {
-      alert("Paciente não encontrado ou sem permissão.");
+      console.error(error);
+      alert("Erro ao carregar prontuário.");
       navigate("/app/home");
     } finally {
       setLoading(false);
@@ -149,9 +186,7 @@ export default function ProviderPaciente() {
       if (fileInput && fileInput.files.length > 0) {
         for (const file of fileInput.files) {
           const fileExt = file.name.split(".").pop();
-          const fileName = `${Date.now()}-${Math.random()
-            .toString(36)
-            .substr(2, 9)}.${fileExt}`;
+          const fileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
           const filePath = `${id}/${fileName}`;
 
           const { error: upErr } = await supabase.storage
@@ -205,6 +240,7 @@ export default function ProviderPaciente() {
       setUploading(false);
     }
   };
+
   const parseArquivos = (urlData) => {
     if (!urlData) return [];
     try {
@@ -219,10 +255,36 @@ export default function ProviderPaciente() {
 
   if (loading)
     return (
-      <div className="p-8 text-center text-gray-500">
-        Carregando prontuário...
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-pulse flex flex-col items-center">
+          <div className="h-4 w-32 bg-gray-200 rounded mb-2"></div>
+          <p className="text-gray-400 text-sm">Validando permissões...</p>
+        </div>
       </div>
     );
+
+  if (erroPermissao) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+        <div className="bg-white p-8 rounded-2xl shadow-lg text-center max-w-sm">
+          <div className="bg-red-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500">
+            <ShieldAlert size={32} />
+          </div>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">
+            Acesso Negado
+          </h2>
+          <p className="text-gray-500 mb-6">{erroPermissao}</p>
+          <Link
+            to="/app/home"
+            className="block w-full bg-primary text-white font-bold py-3 rounded-xl hover:bg-[#3A4A3E] transition-colors"
+          >
+            Voltar ao Início
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   if (!paciente) return null;
 
   return (
@@ -408,7 +470,7 @@ export default function ProviderPaciente() {
                               setFormData((prev) => ({
                                 ...prev,
                                 arquivo_urls: prev.arquivo_urls.filter(
-                                  (_, i) => i !== index
+                                  (_, i) => i !== index,
                                 ),
                               }))
                             }
@@ -578,7 +640,7 @@ export default function ProviderPaciente() {
               <a
                 href={`https://wa.me/55${paciente.telefone_responsavel?.replace(
                   /\D/g,
-                  ""
+                  "",
                 )}`}
                 className="text-green-600 text-sm font-bold underline"
               >
