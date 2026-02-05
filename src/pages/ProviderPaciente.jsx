@@ -62,13 +62,15 @@ export default function ProviderPaciente() {
         return navigate("/login");
       }
 
-      const { count } = await supabase
+      // Verifica se o prestador tem vínculo com o paciente através de plantões
+      const { count, error: countError } = await supabase
         .from("plantoes")
         .select("id", { count: "exact", head: true })
         .eq("funcionario_id", func.id)
         .eq("paciente_id", id);
 
-      if (count === 0) {
+      // Se houver erro na consulta ou count for 0/null, nega acesso
+      if (countError || !count || count === 0) {
         setErroPermissao(
           "Você não possui vínculo com este paciente na sua escala.",
         );
@@ -85,7 +87,6 @@ export default function ProviderPaciente() {
       if (error) throw error;
       setPaciente(pac);
 
-      // Busca evoluções e meds
       fetchEvolucoes();
       const { data: meds } = await supabase
         .from("medicamentos")
