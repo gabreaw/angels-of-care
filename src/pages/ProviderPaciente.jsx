@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import {
@@ -25,6 +25,9 @@ export default function ProviderPaciente() {
   const [evolucoes, setEvolucoes] = useState([]);
   const [medicamentos, setMedicamentos] = useState([]);
   const [editingId, setEditingId] = useState(null);
+
+  const fileInputRef = useRef(null);
+  const [pendingFiles, setPendingFiles] = useState([]);
 
   const [formData, setFormData] = useState({
     turno: "Diurno",
@@ -158,6 +161,7 @@ export default function ProviderPaciente() {
       aspiracao: false,
       arquivo_urls: [],
     });
+    setPendingFiles([]);
   };
 
   const handleSaveEvolucao = async (e) => {
@@ -180,10 +184,10 @@ export default function ProviderPaciente() {
         if (func) nomePrestador = func.nome_completo;
       }
 
-      const fileInput = e.target.anexo;
+      const fileInput = fileInputRef.current;
       let newUrls = [];
-      if (fileInput && fileInput.files.length > 0) {
-        for (const file of fileInput.files) {
+      if (pendingFiles.length > 0) {
+        for (const file of pendingFiles) {
           const fileExt = file.name.split(".").pop();
           const fileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
           const filePath = `${id}/${fileName}`;
@@ -201,6 +205,10 @@ export default function ProviderPaciente() {
         }
       }
       const finalUrls = [...formData.arquivo_urls, ...newUrls];
+      if (fileInput) {
+        fileInput.value = "";
+      }
+      setPendingFiles([]);
       const arquivoUrlString = JSON.stringify(finalUrls);
 
       const payload = {
@@ -446,11 +454,16 @@ export default function ProviderPaciente() {
                       ? "Adicionar mais arquivos"
                       : "Anexar Fotos/Docs"}
                     <input
+                      ref={fileInputRef}
                       type="file"
                       name="anexo"
                       className="hidden"
                       accept="image/*,application/pdf"
                       multiple
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        setPendingFiles((prev) => [...prev, ...files]);
+                      }}
                     />
                   </label>
                   {formData.arquivo_urls.length > 0 && (
@@ -472,6 +485,29 @@ export default function ProviderPaciente() {
                                   (_, i) => i !== index,
                                 ),
                               }))
+                            }
+                            className="text-red-500 hover:text-red-700 font-bold ml-2"
+                          >
+                            X
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {pendingFiles.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {pendingFiles.map((file, index) => (
+                        <div
+                          key={`pending-${index}`}
+                          className="flex justify-between items-center text-[10px] text-blue-700 bg-white px-2 py-1 rounded border border-blue-100"
+                        >
+                          <span className="truncate max-w-[200px]">
+                            {file.name}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPendingFiles((prev) => prev.filter((_, i) => i !== index))
                             }
                             className="text-red-500 hover:text-red-700 font-bold ml-2"
                           >
