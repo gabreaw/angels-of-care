@@ -9,6 +9,7 @@ import {
   CheckCircle,
   XCircle,
   Clock,
+  FileText, // Adicionei um ícone para indicar se é avulso
 } from "lucide-react";
 import NovoOrcamentoModal from "../../components/financeiro/NovoOrcamentoModal";
 import { gerarPropostaDocx } from "../../utils/gerarPropostaDocx";
@@ -26,6 +27,7 @@ export default function Orcamentos() {
 
   async function fetchOrcamentos() {
     setLoading(true);
+    // Buscamos tudo (*) para garantir que 'observacoes' e 'template' venham
     const { data, error } = await supabase
       .from("financeiro_orcamentos")
       .select(`*, financeiro_entidades (nome)`)
@@ -57,17 +59,52 @@ export default function Orcamentos() {
     setModalOpen(true);
   };
 
-  const handlePrint = (item) => {
-    gerarPdfOrcamento(item);
+  // Função auxiliar para exibir o nome correto na tabela
+  const getNomeClienteDisplay = (item) => {
+    // 1. Prioridade: Cliente cadastrado (Relacionamento)
+    if (item.financeiro_entidades?.nome) {
+      return (
+        <span className="font-bold text-gray-800">
+          {item.financeiro_entidades.nome}
+        </span>
+      );
+    }
+
+    // 2. Fallback: Cliente Avulso (Salvo na observação)
+    if (item.observacoes && item.observacoes.includes("Cliente Avulso:")) {
+      const nomeAvulso = item.observacoes
+        .split("Cliente Avulso:")[1]
+        ?.trim()
+        .split("-")[0];
+      return (
+        <span className="font-bold text-blue-600 flex items-center gap-1">
+          {nomeAvulso}{" "}
+          <span className="text-[10px] bg-blue-50 px-1 rounded border border-blue-100 font-normal">
+            Avulso
+          </span>
+        </span>
+      );
+    }
+
+    // 3. Caso não encontre nada
+    return (
+      <span className="text-gray-400 italic">Cliente não identificado</span>
+    );
   };
 
-  const filtered = orcamentos.filter(
-    (item) =>
-      item.descricao?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.financeiro_entidades?.nome
-        ?.toLowerCase()
-        .includes(searchTerm.toLowerCase()),
-  );
+  // Ajuste no filtro para buscar também no nome avulso (observação)
+  const filtered = orcamentos.filter((item) => {
+    const term = searchTerm.toLowerCase();
+    const nomeCadastrado = item.financeiro_entidades?.nome?.toLowerCase() || "";
+    const descricao = item.descricao?.toLowerCase() || "";
+    const obs = item.observacoes?.toLowerCase() || "";
+
+    return (
+      descricao.includes(term) ||
+      nomeCadastrado.includes(term) ||
+      obs.includes(term) // Permite buscar pelo nome do cliente avulso
+    );
+  });
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -109,7 +146,7 @@ export default function Orcamentos() {
           <Search size={18} className="text-gray-400 mr-2" />
           <input
             type="text"
-            placeholder="Pesquisar..."
+            placeholder="Pesquisar por cliente ou descrição..."
             className="bg-transparent w-full py-2 outline-none text-sm text-gray-700"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -150,11 +187,15 @@ export default function Orcamentos() {
                   <td className="p-4 font-mono font-bold text-primary">
                     {item.numero_orcamento || "---"}
                   </td>
-                  <td className="p-4 font-bold text-gray-800">
-                    {item.financeiro_entidades?.nome || "Cliente Removido"}
-                  </td>
+
+                  {/* AQUI ESTAVA O PROBLEMA: Agora usamos a função auxiliar */}
+                  <td className="p-4">{getNomeClienteDisplay(item)}</td>
+
                   <td className="p-4 text-gray-600">
-                    {new Date(item.data_emissao).toLocaleDateString("pt-BR")}
+                    {new Date(item.data_emissao).toLocaleDateString("pt-BR", {
+                      timeZone: "UTC",
+                    })}
+                    {/* Adicionei timeZone UTC para garantir que a data não volte 1 dia na visualização */}
                   </td>
                   <td className="p-4 flex justify-center">
                     {getStatusBadge(item.status)}
@@ -162,7 +203,7 @@ export default function Orcamentos() {
                   <td className="p-4">
                     <div className="flex justify-center gap-2">
                       <button
-                        onClick={() => gerarPropostaDocx(item)} 
+                        onClick={() => gerarPropostaDocx(item)}
                         className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
                         title="Baixar Proposta (Word)"
                       >

@@ -18,6 +18,12 @@ export default function NovoOrcamentoModal({
   const [loading, setLoading] = useState(false);
   const [clientes, setClientes] = useState([]);
 
+  const [clienteInput, setClienteInput] = useState("");
+  const [clienteSelecionadoId, setClienteSelecionadoId] = useState(null);
+
+  const [incluirTecnica, setIncluirTecnica] = useState(true);
+  const [incluirCuidadora, setIncluirCuidadora] = useState(true);
+
   const [valores, setValores] = useState({
     tec12: 290.0,
     cuid12: 275.0,
@@ -26,7 +32,6 @@ export default function NovoOrcamentoModal({
   });
 
   const [formData, setFormData] = useState({
-    entidade_id: "",
     data_emissao: new Date().toISOString().split("T")[0],
     validade_dias: 5,
     previsao_inicio: "",
@@ -36,17 +41,18 @@ export default function NovoOrcamentoModal({
 
   useEffect(() => {
     fetchClientes();
+  }, []);
 
+  useEffect(() => {
     if (orcamentoParaEditar) {
       const buscarValor = (nome) => {
-        const item = orcamentoParaEditar.itens?.find(
-          (i) => i.descricao === nome,
+        const item = orcamentoParaEditar.itens?.find((i) =>
+          i.descricao.includes(nome),
         );
         return item ? item.valor : 0;
       };
 
       setFormData({
-        entidade_id: orcamentoParaEditar.entidade_id || "",
         data_emissao: orcamentoParaEditar.data_emissao
           ? orcamentoParaEditar.data_emissao.split("T")[0]
           : "",
@@ -56,18 +62,50 @@ export default function NovoOrcamentoModal({
         status: orcamentoParaEditar.status || "pendente",
       });
 
-      if (orcamentoParaEditar.itens && orcamentoParaEditar.itens.length > 0) {
-        setValores({
-          tec12: buscarValor("Diária Técnica 12h") || 290,
-          cuid12: buscarValor("Diária Cuidadora 12h") || 275,
-          tec24: buscarValor("Diária Técnica 24h") || 560,
-          cuid24: buscarValor("Diária Cuidadora 24h") || 550,
-        });
+      if (orcamentoParaEditar.entidade_id) {
+        setClienteSelecionadoId(orcamentoParaEditar.entidade_id);
+        const cli = clientes.find(
+          (c) => c.id === orcamentoParaEditar.entidade_id,
+        );
+        if (cli) {
+          setClienteInput(cli.nome);
+        } else if (orcamentoParaEditar.financeiro_entidades?.nome) {
+          setClienteInput(orcamentoParaEditar.financeiro_entidades.nome);
+        }
+      } else if (
+        orcamentoParaEditar.observacoes &&
+        orcamentoParaEditar.observacoes.includes("Cliente Avulso:")
+      ) {
+        // Recupera nome avulso da observação
+        const nomeAvulso = orcamentoParaEditar.observacoes
+          .split("Cliente Avulso:")[1]
+          ?.trim();
+        setClienteInput(nomeAvulso || "");
+        setClienteSelecionadoId(null);
       }
+
+      if (orcamentoParaEditar.itens && orcamentoParaEditar.itens.length > 0) {
+        const temTecnica = orcamentoParaEditar.itens.some((i) =>
+          i.descricao.includes("Técnica"),
+        );
+        const temCuidadora = orcamentoParaEditar.itens.some((i) =>
+          i.descricao.includes("Cuidadora"),
+        );
+
+        setIncluirTecnica(temTecnica);
+        setIncluirCuidadora(temCuidadora);
+      }
+
+      setValores({
+        tec12: buscarValor("Técnica 12h") || 290,
+        cuid12: buscarValor("Cuidadora 12h") || 275,
+        tec24: buscarValor("Técnica 24h") || 560,
+        cuid24: buscarValor("Cuidadora 24h") || 550,
+      });
     } else {
       gerarNumeroOrcamento();
     }
-  }, [orcamentoParaEditar]);
+  }, [orcamentoParaEditar, clientes]); 
 
   async function fetchClientes() {
     const { data } = await supabase
@@ -79,14 +117,14 @@ export default function NovoOrcamentoModal({
 
   async function gerarNumeroOrcamento() {
     const anoAtual = new Date().getFullYear();
-    const NUMERO_INICIAL = 26; 
+    const NUMERO_INICIAL = 26;
 
     const { data } = await supabase
       .from("financeiro_orcamentos")
       .select("numero_orcamento")
-      .ilike("numero_orcamento", `%/${anoAtual}`); 
+      .ilike("numero_orcamento", `%/${anoAtual}`);
 
-    let maiorNumero = NUMERO_INICIAL; 
+    let maiorNumero = NUMERO_INICIAL;
 
     if (data && data.length > 0) {
       data.forEach((orc) => {
@@ -98,7 +136,6 @@ export default function NovoOrcamentoModal({
         }
       });
     }
-
     const proximo = maiorNumero + 1;
     setFormData((prev) => ({
       ...prev,
@@ -110,6 +147,20 @@ export default function NovoOrcamentoModal({
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const handleClienteChange = (e) => {
+    const val = e.target.value;
+    setClienteInput(val);
+
+    const found = clientes.find(
+      (c) => c.nome.toLowerCase() === val.toLowerCase(),
+    );
+    if (found) {
+      setClienteSelecionadoId(found.id);
+    } else {
+      setClienteSelecionadoId(null);
+    }
+  };
+
   const handleValorChange = (e) => {
     setValores({
       ...valores,
@@ -119,49 +170,76 @@ export default function NovoOrcamentoModal({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!incluirTecnica && !incluirCuidadora) {
+      alert("Selecione ao menos um serviço.");
+      return;
+    }
+    if (!clienteInput) {
+      alert("Informe o nome do cliente.");
+      return;
+    }
+
     setLoading(true);
 
-    const itensEstruturados = [
-      {
+    const itensEstruturados = [];
+
+    if (incluirTecnica) {
+      itensEstruturados.push({
         id: crypto.randomUUID(),
         descricao: "Diária Técnica 12h",
         qtd: 1,
         valor: valores.tec12,
         total: valores.tec12,
-      },
-      {
-        id: crypto.randomUUID(),
-        descricao: "Diária Cuidadora 12h",
-        qtd: 1,
-        valor: valores.cuid12,
-        total: valores.cuid12,
-      },
-      {
+      });
+      itensEstruturados.push({
         id: crypto.randomUUID(),
         descricao: "Diária Técnica 24h",
         qtd: 1,
         valor: valores.tec24,
         total: valores.tec24,
-      },
-      {
+      });
+    }
+
+    if (incluirCuidadora) {
+      itensEstruturados.push({
+        id: crypto.randomUUID(),
+        descricao: "Diária Cuidadora 12h",
+        qtd: 1,
+        valor: valores.cuid12,
+        total: valores.cuid12,
+      });
+      itensEstruturados.push({
         id: crypto.randomUUID(),
         descricao: "Diária Cuidadora 24h",
         qtd: 1,
         valor: valores.cuid24,
         total: valores.cuid24,
-      },
-    ];
+      });
+    }
+
+    let templateName = "proposta_v6";
+    if (incluirTecnica && !incluirCuidadora) {
+      templateName = "proposta_v6_tec";
+    } else if (!incluirTecnica && incluirCuidadora) {
+      templateName = "proposta_v6_cuid";
+    }
 
     const payload = {
-      entidade_id: formData.entidade_id || null,
+      entidade_id: clienteSelecionadoId || null,
       data_emissao: formData.data_emissao,
-      descricao: `Proposta Comercial ${formData.numero_orcamento}`,
+      descricao: `Proposta Comercial ${formData.numero_orcamento} - ${clienteInput}`,
       status: formData.status,
       numero_orcamento: formData.numero_orcamento,
       validade_dias: formData.validade_dias,
       previsao_inicio: formData.previsao_inicio || null,
       itens: itensEstruturados,
       valor_total: 0,
+      template: templateName,
+      observacoes: !clienteSelecionadoId
+        ? `Cliente Avulso: ${clienteInput}`
+        : orcamentoParaEditar?.observacoes?.replace(/Cliente Avulso:.*$/, "") ||
+          "", 
     };
 
     try {
@@ -192,9 +270,8 @@ export default function NovoOrcamentoModal({
         <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gray-50 rounded-t-xl">
           <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
             <Calculator size={24} className="text-primary" />
-            {orcamentoParaEditar
-              ? `Editar Proposta ${formData.numero_orcamento}`
-              : `Nova Proposta ${formData.numero_orcamento}`}
+            {orcamentoParaEditar ? "Editar Proposta" : "Nova Proposta"}{" "}
+            {formData.numero_orcamento}
           </h2>
           <button onClick={onClose}>
             <X size={24} className="text-gray-400 hover:text-red-500" />
@@ -208,30 +285,35 @@ export default function NovoOrcamentoModal({
             className="space-y-6"
           >
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+              {/* CLIENTE (COMBOBOX) */}
               <div className="md:col-span-6">
                 <label className="text-xs font-bold text-gray-500 uppercase mb-1">
-                  Cliente
+                  Cliente (Selecione ou Digite)
                 </label>
                 <div className="relative">
                   <User
                     className="absolute left-3 top-2.5 text-gray-400"
                     size={18}
                   />
-                  <select
-                    name="entidade_id"
-                    value={formData.entidade_id}
-                    onChange={handleChange}
-                    className="w-full pl-10 p-2 border rounded-lg bg-white h-10 outline-none focus:border-primary"
+                  <input
+                    list="clientes-list"
+                    className="w-full pl-10 p-2 border rounded-lg bg-white h-10 outline-none focus:border-primary placeholder:text-sm"
+                    placeholder="Selecione ou digite o nome..."
+                    value={clienteInput}
+                    onChange={handleClienteChange}
                     required
-                  >
-                    <option value="">Selecione o Cliente...</option>
+                  />
+                  <datalist id="clientes-list">
                     {clientes.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nome}
-                      </option>
+                      <option key={c.id} value={c.nome} />
                     ))}
-                  </select>
+                  </datalist>
                 </div>
+                {!clienteSelecionadoId && clienteInput.length > 0 && (
+                  <p className="text-[10px] text-orange-600 mt-1 ml-1">
+                    * Cliente não cadastrado (será salvo como avulso).
+                  </p>
+                )}
               </div>
 
               <div className="md:col-span-3">
@@ -247,6 +329,7 @@ export default function NovoOrcamentoModal({
                 />
               </div>
 
+              {/* VALIDADE */}
               <div className="md:col-span-3">
                 <label className="text-xs font-bold text-gray-500 uppercase mb-1">
                   Validade (Dias)
@@ -266,6 +349,7 @@ export default function NovoOrcamentoModal({
                 </div>
               </div>
             </div>
+
             <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex flex-col md:flex-row gap-4 items-center">
               <div className="flex-1 w-full">
                 <label className="text-xs font-bold text-blue-700 uppercase mb-1 block">
@@ -281,7 +365,7 @@ export default function NovoOrcamentoModal({
               </div>
               <div className="flex-1 w-full">
                 <label className="text-xs font-bold text-blue-700 uppercase mb-1 block">
-                  Número (Automático)
+                  Número
                 </label>
                 <input
                   type="text"
@@ -294,7 +378,47 @@ export default function NovoOrcamentoModal({
 
             <hr className="border-gray-100" />
 
-            <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
+            {/* SELEÇÃO DE SERVIÇOS */}
+            <div>
+              <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">
+                Tipos de Serviço (Define o Template)
+              </label>
+              <div className="flex gap-4">
+                <label
+                  className={`flex items-center gap-2 px-4 py-3 rounded-xl border cursor-pointer transition-all ${incluirTecnica ? "bg-orange-50 border-orange-200 ring-1 ring-orange-100" : "bg-white border-gray-200 hover:bg-gray-50"}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={incluirTecnica}
+                    onChange={(e) => setIncluirTecnica(e.target.checked)}
+                    className="w-4 h-4 accent-orange-600"
+                  />
+                  <span
+                    className={`text-sm font-bold ${incluirTecnica ? "text-orange-700" : "text-gray-600"}`}
+                  >
+                    Técnica de Enfermagem
+                  </span>
+                </label>
+
+                <label
+                  className={`flex items-center gap-2 px-4 py-3 rounded-xl border cursor-pointer transition-all ${incluirCuidadora ? "bg-purple-50 border-purple-200 ring-1 ring-purple-100" : "bg-white border-gray-200 hover:bg-gray-50"}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={incluirCuidadora}
+                    onChange={(e) => setIncluirCuidadora(e.target.checked)}
+                    className="w-4 h-4 accent-purple-600"
+                  />
+                  <span
+                    className={`text-sm font-bold ${incluirCuidadora ? "text-purple-700" : "text-gray-600"}`}
+                  >
+                    Cuidadora
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 transition-all">
               <h3 className="text-sm font-bold text-gray-700 mb-4 uppercase flex items-center gap-2">
                 <DollarSign size={16} /> Valores das Diárias
               </h3>
@@ -302,84 +426,95 @@ export default function NovoOrcamentoModal({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-200">
-                    <span className="w-2 h-2 rounded-full bg-orange-400"></span>
+                    <span className="w-2 h-2 rounded-full bg-blue-400"></span>
                     <h4 className="font-bold text-gray-800 text-sm">
                       Plantão 12 Horas
                     </h4>
                   </div>
-                  <div className="flex justify-between items-center bg-white p-3 rounded border border-gray-200">
-                    <span className="text-xs font-bold text-gray-500">
-                      Técnica Enf.
-                    </span>
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs text-gray-400">R$</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        name="tec12"
-                        value={valores.tec12}
-                        onChange={handleValorChange}
-                        className="w-24 text-right font-bold text-gray-700 outline-none border-b border-transparent focus:border-primary"
-                      />
+
+                  {incluirTecnica && (
+                    <div className="flex justify-between items-center bg-white p-3 rounded border border-gray-200 animate-in fade-in">
+                      <span className="text-xs font-bold text-gray-500">
+                        Técnica Enf.
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-gray-400">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          name="tec12"
+                          value={valores.tec12}
+                          onChange={handleValorChange}
+                          className="w-24 text-right font-bold text-gray-700 outline-none border-b border-transparent focus:border-primary"
+                        />
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex justify-between items-center bg-white p-3 rounded border border-gray-200">
-                    <span className="text-xs font-bold text-gray-500">
-                      Cuidadora
-                    </span>
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs text-gray-400">R$</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        name="cuid12"
-                        value={valores.cuid12}
-                        onChange={handleValorChange}
-                        className="w-24 text-right font-bold text-gray-700 outline-none border-b border-transparent focus:border-primary"
-                      />
+                  )}
+                  {incluirCuidadora && (
+                    <div className="flex justify-between items-center bg-white p-3 rounded border border-gray-200 animate-in fade-in">
+                      <span className="text-xs font-bold text-gray-500">
+                        Cuidadora
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-gray-400">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          name="cuid12"
+                          value={valores.cuid12}
+                          onChange={handleValorChange}
+                          className="w-24 text-right font-bold text-gray-700 outline-none border-b border-transparent focus:border-primary"
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-200">
-                    <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                    <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
                     <h4 className="font-bold text-gray-800 text-sm">
                       Plantão 24 Horas
                     </h4>
                   </div>
-                  <div className="flex justify-between items-center bg-white p-3 rounded border border-gray-200">
-                    <span className="text-xs font-bold text-gray-500">
-                      Técnica Enf.
-                    </span>
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs text-gray-400">R$</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        name="tec24"
-                        value={valores.tec24}
-                        onChange={handleValorChange}
-                        className="w-24 text-right font-bold text-gray-700 outline-none border-b border-transparent focus:border-primary"
-                      />
+
+                  {incluirTecnica && (
+                    <div className="flex justify-between items-center bg-white p-3 rounded border border-gray-200 animate-in fade-in">
+                      <span className="text-xs font-bold text-gray-500">
+                        Técnica Enf.
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-gray-400">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          name="tec24"
+                          value={valores.tec24}
+                          onChange={handleValorChange}
+                          className="w-24 text-right font-bold text-gray-700 outline-none border-b border-transparent focus:border-primary"
+                        />
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex justify-between items-center bg-white p-3 rounded border border-gray-200">
-                    <span className="text-xs font-bold text-gray-500">
-                      Cuidadora
-                    </span>
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs text-gray-400">R$</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        name="cuid24"
-                        value={valores.cuid24}
-                        onChange={handleValorChange}
-                        className="w-24 text-right font-bold text-gray-700 outline-none border-b border-transparent focus:border-primary"
-                      />
+                  )}
+
+                  {incluirCuidadora && (
+                    <div className="flex justify-between items-center bg-white p-3 rounded border border-gray-200 animate-in fade-in">
+                      <span className="text-xs font-bold text-gray-500">
+                        Cuidadora
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-gray-400">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          name="cuid24"
+                          value={valores.cuid24}
+                          onChange={handleValorChange}
+                          className="w-24 text-right font-bold text-gray-700 outline-none border-b border-transparent focus:border-primary"
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -395,8 +530,8 @@ export default function NovoOrcamentoModal({
           </button>
           <button
             form="form-orcamento"
-            disabled={loading}
-            className="px-6 py-2 bg-primary text-white rounded font-bold hover:bg-[#3A4A3E] flex items-center gap-2 text-sm shadow-md transition-all disabled:opacity-50"
+            disabled={loading || (!incluirTecnica && !incluirCuidadora)}
+            className="px-6 py-2 bg-primary text-white rounded font-bold hover:bg-[#3A4A3E] flex items-center gap-2 text-sm shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Salvando..." : "Salvar Proposta"} <Save size={18} />
           </button>
