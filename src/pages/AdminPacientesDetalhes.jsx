@@ -77,7 +77,21 @@ export default function AdminPacientesDetalhes() {
 
   const [expandedMonths, setExpandedMonths] = useState({});
   const [expandedMonthsEscalas, setExpandedMonthsEscalas] = useState({});
-
+  const [medUploading, setMedUploading] = useState(false);
+  const [medForm, setMedForm] = useState({
+    nome: "",
+    dosagem: "",
+    frequencia: "",
+    via: "Oral",
+    horario: "",
+    observacoes: "",
+    triturar: false,
+    diluir_ml: "",
+    administrar_ml: "",
+    pausar_dieta: false,
+    particularidades: "",
+    arquivo_urls: [],
+  });
   useEffect(() => {
     fetchTudo();
   }, []);
@@ -125,6 +139,99 @@ export default function AdminPacientesDetalhes() {
       setLoading(false);
     }
   }
+  const handleMedChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setMedForm((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+  };
+
+  const handleMedFileUpload = async (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setMedUploading(true);
+    const newUrls = [];
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const url = await pacientesService.uploadEvolucaoArquivo(id, file);
+        if (url) newUrls.push(url);
+      }
+      setMedForm((prev) => ({
+        ...prev,
+        arquivo_urls: [...prev.arquivo_urls, ...newUrls],
+      }));
+    } catch (err) {
+      alert("Erro no upload: " + err.message);
+    } finally {
+      setMedUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  const removeMedAnexo = (indexToRemove) => {
+    setMedForm((prev) => ({
+      ...prev,
+      arquivo_urls: prev.arquivo_urls.filter(
+        (_, index) => index !== indexToRemove,
+      ),
+    }));
+  };
+
+  const handleSaveMedicamento = async (e) => {
+    e.preventDefault();
+    const novo = {
+      paciente_id: id,
+      nome_medicamento: medForm.nome,
+      dosagem: medForm.dosagem,
+      frequencia: medForm.frequencia,
+      via_administracao: medForm.via,
+      horario: medForm.horario,
+      observacoes: medForm.observacoes,
+      arquivo_url: JSON.stringify(medForm.arquivo_urls),
+      sonda_triturar: medForm.via === "Sonda" ? medForm.triturar : false,
+      sonda_diluir_ml: medForm.via === "Sonda" ? medForm.diluir_ml : null,
+      sonda_administrar_ml:
+        medForm.via === "Sonda" ? medForm.administrar_ml : null,
+      sonda_pausar_dieta:
+        medForm.via === "Sonda" ? medForm.pausar_dieta : false,
+      sonda_particularidades:
+        medForm.via === "Sonda" ? medForm.particularidades : null,
+    };
+
+    try {
+      const created = await pacientesService.createMedicamento(novo);
+      setMedicamentos([created, ...medicamentos]);
+      setMedForm({
+        nome: "",
+        dosagem: "",
+        frequencia: "",
+        via: "Oral",
+        horario: "",
+        observacoes: "",
+        triturar: false,
+        diluir_ml: "",
+        administrar_ml: "",
+        pausar_dieta: false,
+        particularidades: "",
+        arquivo_urls: [],
+      });
+      alert("Medicamento adicionado!");
+    } catch (err) {
+      alert("Erro: " + err.message);
+    }
+  };
+
+  const deletarMedicamento = async (idMed) => {
+    if (!window.confirm("Excluir esta prescrição?")) return;
+    try {
+      await pacientesService.deleteFromTable("medicamentos", idMed);
+      setMedicamentos(medicamentos.filter((m) => m.id !== idMed));
+    } catch (err) {
+      alert("Erro ao excluir: " + err.message);
+    }
+  };
 
   const evolucoesPorMes = evolucoes.reduce((acc, evo) => {
     const dataIso =
@@ -1523,157 +1630,359 @@ export default function AdminPacientesDetalhes() {
         )}
 
         {activeTab === "prontuario" && (
-          <div className="grid lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-2xl shadow border border-beige p-6">
-              <h3 className="text-lg font-bold text-primary mb-4 flex items-center gap-2">
-                <FileText size={20} /> Histórico & Alergias
+          <div className="grid lg:grid-cols-12 gap-6 animate-in fade-in duration-500">
+            {/* FORMULÁRIO (ESQUERDA) */}
+            <div className="lg:col-span-5 bg-white rounded-2xl shadow border border-gray-200 p-6 h-fit sticky top-6">
+              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <Pill size={20} className="text-blue-600" /> Nova Prescrição
               </h3>
-              <form
-                onSubmit={addHistorico}
-                className="bg-sage/10 p-4 rounded-xl mb-6 space-y-3"
-              >
-                <div className="grid grid-cols-2 gap-2">
-                  <select name="categoria" className="input-mini bg-white">
-                    <option>Doença Crônica</option>
-                    <option>Alergia</option>
-                    <option>Cirurgia</option>
-                    <option>Internação</option>
-                  </select>
-                  <input
-                    name="descricao"
-                    placeholder="Descrição"
-                    required
-                    className="input-mini"
-                  />
-                </div>
-                <input
-                  name="observacoes"
-                  placeholder="Obs"
-                  className="input-mini w-full"
-                />
-                <button className="btn-mini w-full bg-primary text-white">
-                  Adicionar Histórico
-                </button>
-              </form>
-              <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                {historico.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex justify-between items-start p-3 bg-paper rounded-lg border border-beige/50 text-sm"
-                  >
-                    <div>
-                      <span className="text-xs font-bold uppercase text-sage">
-                        {item.categoria}
-                      </span>
-                      <p className="font-bold text-darkText">
-                        {item.descricao}
-                      </p>
-                      {item.observacoes && (
-                        <p className="text-xs text-darkText/60">
-                          {item.observacoes}
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      onClick={() =>
-                        deletarItem(
-                          "historico_clinico",
-                          item.id,
-                          setHistorico,
-                          historico,
-                        )
-                      }
-                      className="text-red-300 hover:text-red-500"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="bg-white rounded-2xl shadow border border-beige p-6">
-              <h3 className="text-lg font-bold text-primary mb-4 flex items-center gap-2">
-                <Pill size={20} /> Medicamentos
-              </h3>
-              <form
-                onSubmit={addMedicamento}
-                className="bg-blue-50 p-4 rounded-xl mb-6 space-y-3"
-              >
-                <div className="grid grid-cols-2 gap-2">
+
+              <form onSubmit={handleSaveMedicamento} className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase mb-1 block">
+                    Nome do Medicamento
+                  </label>
                   <input
                     name="nome"
-                    placeholder="Nome"
+                    value={medForm.nome}
+                    onChange={handleMedChange}
+                    placeholder="Ex: Dipirona"
                     required
-                    className="input-mini"
-                  />
-                  <input
-                    name="dosagem"
-                    placeholder="Dose"
-                    required
-                    className="input-mini"
+                    className="w-full p-2 border rounded-lg outline-none focus:border-blue-500 text-sm"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    name="frequencia"
-                    placeholder="Freq"
-                    required
-                    className="input-mini"
-                  />
-                  <select name="via" className="input-mini bg-white">
-                    <option>Oral</option>
-                    <option>Sublingual</option>
-                    <option>Injetável</option>
-                    <option>Sonda</option>
-                  </select>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-500 uppercase mb-1 block">
+                      Dosagem
+                    </label>
+                    <input
+                      name="dosagem"
+                      value={medForm.dosagem}
+                      onChange={handleMedChange}
+                      placeholder="Ex: 500mg"
+                      required
+                      className="w-full p-2 border rounded-lg outline-none focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-500 uppercase mb-1 block">
+                      Horário
+                    </label>
+                    <input
+                      name="horario"
+                      type="time"
+                      value={medForm.horario}
+                      onChange={handleMedChange}
+                      className="w-full p-2 border rounded-lg outline-none focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-500 uppercase mb-1 block">
+                      Frequência
+                    </label>
+                    <input
+                      name="frequencia"
+                      value={medForm.frequencia}
+                      onChange={handleMedChange}
+                      placeholder="Ex: 8/8h"
+                      required
+                      className="w-full p-2 border rounded-lg outline-none focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-500 uppercase mb-1 block">
+                      Via
+                    </label>
+                    <select
+                      name="via"
+                      value={medForm.via}
+                      onChange={handleMedChange}
+                      className="w-full p-2 border rounded-lg bg-white outline-none focus:border-blue-500 text-sm"
+                    >
+                      <option>Oral</option>
+                      <option>Sonda</option>
+                      <option>Sublingual</option>
+                      <option>Injetável (IM)</option>
+                      <option>Injetável (IV)</option>
+                      <option>Tópico</option>
+                      <option>Inalatório</option>
+                    </select>
+                  </div>
                 </div>
-                <button className="btn-mini w-full bg-blue-600 text-white">
-                  Adicionar Medicamento
-                </button>
-              </form>
-              <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                {medicamentos.map((med) => (
-                  <div
-                    key={med.id}
-                    className="flex justify-between items-center p-3 bg-paper rounded-lg border border-beige/50 text-sm"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="bg-blue-100 text-blue-600 p-2 rounded-full">
-                        <Pill size={16} />
+
+                {medForm.via === "Sonda" && (
+                  <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 space-y-3 animate-in slide-in-from-top-2">
+                    <h4 className="text-xs font-bold text-orange-800 uppercase border-b border-orange-200 pb-1 mb-2">
+                      Protocolo Sonda
+                    </h4>
+                    <div className="flex gap-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          name="triturar"
+                          checked={medForm.triturar}
+                          onChange={handleMedChange}
+                          className="accent-orange-600 w-4 h-4 rounded"
+                        />
+                        <span className="text-xs font-bold text-orange-900">
+                          Triturar?
+                        </span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          name="pausar_dieta"
+                          checked={medForm.pausar_dieta}
+                          onChange={handleMedChange}
+                          className="accent-orange-600 w-4 h-4 rounded"
+                        />
+                        <span className="text-xs font-bold text-orange-900">
+                          Pausar Dieta?
+                        </span>
+                      </label>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] font-bold text-orange-800 uppercase">
+                          Diluir em (ml)
+                        </label>
+                        <input
+                          type="number"
+                          name="diluir_ml"
+                          value={medForm.diluir_ml}
+                          onChange={handleMedChange}
+                          placeholder="Ex: 20"
+                          className="w-full p-2 border border-orange-200 rounded text-sm focus:border-orange-500 outline-none"
+                        />
                       </div>
                       <div>
-                        <p className="font-bold text-darkText">
-                          {med.nome_medicamento}{" "}
-                          <span className="text-xs font-normal text-darkText/60">
-                            ({med.dosagem})
-                          </span>
-                        </p>
-                        <p className="text-xs text-sage">
-                          {med.frequencia} • {med.via_administracao}
-                        </p>
+                        <label className="text-[10px] font-bold text-orange-800 uppercase">
+                          Administrar (ml)
+                        </label>
+                        <input
+                          type="number"
+                          name="administrar_ml"
+                          value={medForm.administrar_ml}
+                          onChange={handleMedChange}
+                          placeholder="Ex: 10"
+                          className="w-full p-2 border border-orange-200 rounded text-sm focus:border-orange-500 outline-none"
+                        />
                       </div>
                     </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-orange-800 uppercase">
+                        Particularidades
+                      </label>
+                      <textarea
+                        name="particularidades"
+                        value={medForm.particularidades}
+                        onChange={handleMedChange}
+                        placeholder="Ex: Lavar sonda antes e depois..."
+                        className="w-full p-2 border border-orange-200 rounded text-sm h-16 resize-none focus:border-orange-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase mb-1 block">
+                    Observações Gerais
+                  </label>
+                  <textarea
+                    name="observacoes"
+                    value={medForm.observacoes}
+                    onChange={handleMedChange}
+                    placeholder="Detalhes importantes..."
+                    className="w-full p-3 rounded-xl border border-gray-300 text-sm h-24 focus:border-blue-500 outline-none resize-none"
+                  />
+                </div>
+
+                <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100 border-dashed">
+                  <label className="text-[10px] font-bold text-blue-800 uppercase mb-2 flex items-center gap-2 cursor-pointer hover:text-blue-600">
+                    <Paperclip size={14} /> Anexar Receita / Prescrição
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*, application/pdf"
+                      onChange={handleMedFileUpload}
+                      disabled={medUploading}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {medForm.arquivo_urls.length > 0 && (
+                    <div className="space-y-1 mt-2">
+                      {medForm.arquivo_urls.map((url, index) => (
+                        <div
+                          key={index}
+                          className="flex justify-between items-center bg-white p-2 rounded border border-blue-100 text-xs"
+                        >
+                          <span className="truncate max-w-[150px] text-blue-600 font-medium">
+                            Anexo {index + 1}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeMedAnexo(index)}
+                            className="text-red-400 hover:text-red-600"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {medUploading && (
+                    <p className="text-xs text-blue-500 animate-pulse mt-1">
+                      Enviando...
+                    </p>
+                  )}
+                </div>
+
+                <button
+                  disabled={medUploading}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-md transition-all flex justify-center items-center gap-2 disabled:opacity-50"
+                >
+                  <Plus size={18} /> Adicionar Prescrição
+                </button>
+              </form>
+            </div>
+            <div className="lg:col-span-7 space-y-4">
+              <h3 className="text-sm font-bold text-gray-400 uppercase mt-6 mb-2">
+                Prescrições Ativas
+              </h3>
+              {medicamentos.length === 0 && (
+                <div className="text-center p-10 bg-gray-50 rounded-2xl border border-dashed border-gray-300 text-gray-400">
+                  Nenhum medicamento cadastrado.
+                </div>
+              )}
+
+              {medicamentos.map((med) => (
+                <div
+                  key={med.id}
+                  className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all group"
+                >
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex items-start gap-3">
+                      <div className="bg-blue-100 text-blue-600 p-3 rounded-xl">
+                        <Pill size={24} />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-lg text-gray-800 leading-tight">
+                          {med.nome_medicamento}
+                        </h4>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          <span className="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                            {med.dosagem}
+                          </span>
+                          <span className="text-xs font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded">
+                            {med.frequencia}
+                          </span>
+                          <span
+                            className={`text-xs font-bold px-2 py-0.5 rounded ${med.via_administracao === "Sonda" ? "bg-orange-100 text-orange-700 border border-orange-200" : "bg-purple-50 text-purple-600"}`}
+                          >
+                            via {med.via_administracao}
+                          </span>
+                          {med.horario && (
+                            <span className="text-xs font-bold bg-yellow-50 text-yellow-700 px-2 py-0.5 rounded flex items-center gap-1">
+                              <Clock size={10} /> {med.horario}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
                     <button
-                      onClick={() =>
-                        deletarItem(
-                          "medicamentos",
-                          med.id,
-                          setMedicamentos,
-                          medicamentos,
-                        )
-                      }
-                      className="text-red-300 hover:text-red-500"
+                      onClick={() => deletarMedicamento(med.id)}
+                      className="text-gray-300 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
                     >
-                      <Trash2 size={16} />
+                      <Trash2 size={18} />
                     </button>
                   </div>
-                ))}
-              </div>
+
+                  {med.via_administracao === "Sonda" && (
+                    <div className="bg-orange-50/50 rounded-lg p-3 mb-3 border border-orange-100 text-xs text-orange-900 grid grid-cols-2 gap-y-2 gap-x-4">
+                      <div className="font-bold col-span-2 border-b border-orange-200 pb-1 mb-1">
+                        DETALHES DA SONDA
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {med.sonda_triturar ? (
+                          <CheckSquare size={12} className="text-green-600" />
+                        ) : (
+                          <X size={12} className="text-red-400" />
+                        )}{" "}
+                        Triturar
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {med.sonda_pausar_dieta ? (
+                          <CheckSquare size={12} className="text-red-600" />
+                        ) : (
+                          <X size={12} className="text-green-400" />
+                        )}{" "}
+                        Pausar Dieta
+                      </div>
+                      {med.sonda_diluir_ml && (
+                        <div>
+                          Diluir: <b>{med.sonda_diluir_ml}ml</b>
+                        </div>
+                      )}
+                      {med.sonda_administrar_ml && (
+                        <div>
+                          Administrar: <b>{med.sonda_administrar_ml}ml</b>
+                        </div>
+                      )}
+                      {med.sonda_particularidades && (
+                        <div className="col-span-2 mt-1 bg-white p-2 rounded border border-orange-100 italic text-orange-800">
+                          "{med.sonda_particularidades}"
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {med.observacoes && (
+                    <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-100 mb-3 whitespace-pre-wrap">
+                      <span className="font-bold text-gray-400 text-xs block mb-1">
+                        OBSERVAÇÕES:
+                      </span>
+                      {med.observacoes}
+                    </div>
+                  )}
+
+                  {(() => {
+                    let urls = [];
+                    try {
+                      if (med.arquivo_url) {
+                        urls = med.arquivo_url.startsWith("[")
+                          ? JSON.parse(med.arquivo_url)
+                          : [med.arquivo_url];
+                      }
+                    } catch (e) {
+                      urls = [];
+                    }
+
+                    if (urls.length > 0)
+                      return (
+                        <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-gray-100">
+                          {urls.map((url, idx) => (
+                            <a
+                              key={idx}
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-bold flex items-center gap-2 hover:bg-blue-100 transition-colors"
+                            >
+                              <Paperclip size={12} /> Prescrição {idx + 1}
+                            </a>
+                          ))}
+                        </div>
+                      );
+                  })()}
+                </div>
+              ))}
             </div>
           </div>
         )}
       </div>
-
       {editModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl border border-beige max-h-[90vh] overflow-y-auto">
