@@ -9,7 +9,7 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  FileText, // Adicionei um ícone para indicar se é avulso
+  MessageCircle, // Novo ícone para etapa
 } from "lucide-react";
 import NovoOrcamentoModal from "../../components/financeiro/NovoOrcamentoModal";
 import { gerarPropostaDocx } from "../../utils/gerarPropostaDocx";
@@ -27,7 +27,6 @@ export default function Orcamentos() {
 
   async function fetchOrcamentos() {
     setLoading(true);
-    // Buscamos tudo (*) para garantir que 'observacoes' e 'template' venham
     const { data, error } = await supabase
       .from("financeiro_orcamentos")
       .select(`*, financeiro_entidades (nome)`)
@@ -59,9 +58,11 @@ export default function Orcamentos() {
     setModalOpen(true);
   };
 
-  // Função auxiliar para exibir o nome correto na tabela
+  const handlePrint = (item) => {
+    gerarPropostaDocx(item);
+  };
+
   const getNomeClienteDisplay = (item) => {
-    // 1. Prioridade: Cliente cadastrado (Relacionamento)
     if (item.financeiro_entidades?.nome) {
       return (
         <span className="font-bold text-gray-800">
@@ -69,13 +70,14 @@ export default function Orcamentos() {
         </span>
       );
     }
-
-    // 2. Fallback: Cliente Avulso (Salvo na observação)
     if (item.observacoes && item.observacoes.includes("Cliente Avulso:")) {
+      // Ajuste para limpar a tag de etapa se ela vier grudada no nome
       const nomeAvulso = item.observacoes
         .split("Cliente Avulso:")[1]
+        ?.split("[")[0] // Para no inicio da tag [ETAPA...
         ?.trim()
-        .split("-")[0];
+        .split("-")[0]; // Remove traços extras
+
       return (
         <span className="font-bold text-blue-600 flex items-center gap-1">
           {nomeAvulso}{" "}
@@ -85,14 +87,20 @@ export default function Orcamentos() {
         </span>
       );
     }
-
-    // 3. Caso não encontre nada
     return (
       <span className="text-gray-400 italic">Cliente não identificado</span>
     );
   };
 
-  // Ajuste no filtro para buscar também no nome avulso (observação)
+  // Helper para extrair a etapa da observação
+  const getEtapaFunil = (item) => {
+    if (item.observacoes && item.observacoes.includes("[ETAPA:")) {
+      const match = item.observacoes.match(/\[ETAPA: (.*?)\]/);
+      return match ? match[1] : null;
+    }
+    return null;
+  };
+
   const filtered = orcamentos.filter((item) => {
     const term = searchTerm.toLowerCase();
     const nomeCadastrado = item.financeiro_entidades?.nome?.toLowerCase() || "";
@@ -102,31 +110,49 @@ export default function Orcamentos() {
     return (
       descricao.includes(term) ||
       nomeCadastrado.includes(term) ||
-      obs.includes(term) // Permite buscar pelo nome do cliente avulso
+      obs.includes(term)
     );
   });
 
-  const getStatusBadge = (status) => {
-    switch (status) {
+  const getStatusBadge = (item) => {
+    // 1. Badge Principal (Status do sistema)
+    let badgePrincipal;
+    switch (item.status) {
       case "aprovado":
-        return (
+        badgePrincipal = (
           <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-bold flex items-center gap-1 w-fit">
             <CheckCircle size={12} /> Aprovado
           </span>
         );
+        break;
       case "rejeitado":
-        return (
+        badgePrincipal = (
           <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-bold flex items-center gap-1 w-fit">
             <XCircle size={12} /> Rejeitado
           </span>
         );
+        break;
       default:
-        return (
+        badgePrincipal = (
           <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded text-xs font-bold flex items-center gap-1 w-fit">
             <Clock size={12} /> Pendente
           </span>
         );
     }
+
+    // 2. Badge Secundário (Etapa do Funil)
+    const etapa = getEtapaFunil(item);
+
+    return (
+      <div className="flex flex-col gap-1 items-center">
+        {badgePrincipal}
+        {etapa && (
+          <span className="text-[10px] text-gray-500 bg-gray-50 px-2 py-0.5 rounded border border-gray-100 flex items-center gap-1">
+            <MessageCircle size={10} className="text-orange-400" /> {etapa}
+          </span>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -161,7 +187,8 @@ export default function Orcamentos() {
               <th className="p-4">Nº Proposta</th>
               <th className="p-4">Cliente</th>
               <th className="p-4">Emissão</th>
-              <th className="p-4 text-center">Status</th>
+              <th className="p-4 text-center">Status / Etapa</th>{" "}
+              {/* Cabeçalho ajustado */}
               <th className="p-4 text-center">Ações</th>
             </tr>
           </thead>
@@ -188,22 +215,21 @@ export default function Orcamentos() {
                     {item.numero_orcamento || "---"}
                   </td>
 
-                  {/* AQUI ESTAVA O PROBLEMA: Agora usamos a função auxiliar */}
                   <td className="p-4">{getNomeClienteDisplay(item)}</td>
 
                   <td className="p-4 text-gray-600">
                     {new Date(item.data_emissao).toLocaleDateString("pt-BR", {
                       timeZone: "UTC",
                     })}
-                    {/* Adicionei timeZone UTC para garantir que a data não volte 1 dia na visualização */}
                   </td>
-                  <td className="p-4 flex justify-center">
-                    {getStatusBadge(item.status)}
-                  </td>
+
+                  {/* Célula de Status Ajustada */}
+                  <td className="p-4">{getStatusBadge(item)}</td>
+
                   <td className="p-4">
                     <div className="flex justify-center gap-2">
                       <button
-                        onClick={() => gerarPropostaDocx(item)}
+                        onClick={() => handlePrint(item)}
                         className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
                         title="Baixar Proposta (Word)"
                       >

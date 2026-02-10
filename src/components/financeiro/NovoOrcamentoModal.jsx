@@ -8,6 +8,8 @@ import {
   Calendar,
   DollarSign,
   Clock,
+  MessageCircle,
+  CheckCircle, // Icone para status
 } from "lucide-react";
 
 export default function NovoOrcamentoModal({
@@ -24,6 +26,8 @@ export default function NovoOrcamentoModal({
   const [incluirTecnica, setIncluirTecnica] = useState(true);
   const [incluirCuidadora, setIncluirCuidadora] = useState(true);
 
+  const [etapaContato, setEtapaContato] = useState("1º Contato");
+
   const [valores, setValores] = useState({
     tec12: 290.0,
     cuid12: 275.0,
@@ -36,12 +40,25 @@ export default function NovoOrcamentoModal({
     validade_dias: 5,
     previsao_inicio: "",
     numero_orcamento: "",
-    status: "pendente",
+    status: "pendente", // Status oficial do sistema
   });
 
   useEffect(() => {
     fetchClientes();
   }, []);
+
+  // LÓGICA INTELIGENTE: Atualiza o status baseado na etapa escolhida
+  const handleEtapaChange = (novaEtapa) => {
+    setEtapaContato(novaEtapa);
+
+    // Se marcou Fechado ou Assinatura, já muda para Aprovado automaticamente
+    if (novaEtapa === "Fechado" || novaEtapa === "Aguardando Assinatura") {
+      setFormData((prev) => ({ ...prev, status: "aprovado" }));
+    } else {
+      // Se voltou para negociação, volta para pendente (opcional)
+      setFormData((prev) => ({ ...prev, status: "pendente" }));
+    }
+  };
 
   useEffect(() => {
     if (orcamentoParaEditar) {
@@ -67,21 +84,30 @@ export default function NovoOrcamentoModal({
         const cli = clientes.find(
           (c) => c.id === orcamentoParaEditar.entidade_id,
         );
-        if (cli) {
-          setClienteInput(cli.nome);
-        } else if (orcamentoParaEditar.financeiro_entidades?.nome) {
+        if (cli) setClienteInput(cli.nome);
+        else if (orcamentoParaEditar.financeiro_entidades?.nome)
           setClienteInput(orcamentoParaEditar.financeiro_entidades.nome);
-        }
       } else if (
         orcamentoParaEditar.observacoes &&
         orcamentoParaEditar.observacoes.includes("Cliente Avulso:")
       ) {
-        // Recupera nome avulso da observação
         const nomeAvulso = orcamentoParaEditar.observacoes
           .split("Cliente Avulso:")[1]
+          ?.split("[")[0]
           ?.trim();
         setClienteInput(nomeAvulso || "");
         setClienteSelecionadoId(null);
+      }
+
+      // Recuperar Etapa
+      if (
+        orcamentoParaEditar.observacoes &&
+        orcamentoParaEditar.observacoes.includes("[ETAPA:")
+      ) {
+        const match = orcamentoParaEditar.observacoes.match(/\[ETAPA: (.*?)\]/);
+        if (match && match[1]) {
+          setEtapaContato(match[1]);
+        }
       }
 
       if (orcamentoParaEditar.itens && orcamentoParaEditar.itens.length > 0) {
@@ -91,7 +117,6 @@ export default function NovoOrcamentoModal({
         const temCuidadora = orcamentoParaEditar.itens.some((i) =>
           i.descricao.includes("Cuidadora"),
         );
-
         setIncluirTecnica(temTecnica);
         setIncluirCuidadora(temCuidadora);
       }
@@ -105,7 +130,7 @@ export default function NovoOrcamentoModal({
     } else {
       gerarNumeroOrcamento();
     }
-  }, [orcamentoParaEditar, clientes]); 
+  }, [orcamentoParaEditar, clientes]);
 
   async function fetchClientes() {
     const { data } = await supabase
@@ -118,28 +143,22 @@ export default function NovoOrcamentoModal({
   async function gerarNumeroOrcamento() {
     const anoAtual = new Date().getFullYear();
     const NUMERO_INICIAL = 26;
-
     const { data } = await supabase
       .from("financeiro_orcamentos")
       .select("numero_orcamento")
       .ilike("numero_orcamento", `%/${anoAtual}`);
-
     let maiorNumero = NUMERO_INICIAL;
-
     if (data && data.length > 0) {
       data.forEach((orc) => {
         if (orc.numero_orcamento) {
           const numero = parseInt(orc.numero_orcamento.split("/")[0]);
-          if (!isNaN(numero) && numero > maiorNumero) {
-            maiorNumero = numero;
-          }
+          if (!isNaN(numero) && numero > maiorNumero) maiorNumero = numero;
         }
       });
     }
-    const proximo = maiorNumero + 1;
     setFormData((prev) => ({
       ...prev,
-      numero_orcamento: `${proximo}/${anoAtual}`,
+      numero_orcamento: `${maiorNumero + 1}/${anoAtual}`,
     }));
   }
 
@@ -150,15 +169,11 @@ export default function NovoOrcamentoModal({
   const handleClienteChange = (e) => {
     const val = e.target.value;
     setClienteInput(val);
-
     const found = clientes.find(
       (c) => c.nome.toLowerCase() === val.toLowerCase(),
     );
-    if (found) {
-      setClienteSelecionadoId(found.id);
-    } else {
-      setClienteSelecionadoId(null);
-    }
+    if (found) setClienteSelecionadoId(found.id);
+    else setClienteSelecionadoId(null);
   };
 
   const handleValorChange = (e) => {
@@ -170,20 +185,13 @@ export default function NovoOrcamentoModal({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!incluirTecnica && !incluirCuidadora) {
-      alert("Selecione ao menos um serviço.");
-      return;
-    }
-    if (!clienteInput) {
-      alert("Informe o nome do cliente.");
-      return;
-    }
+    if (!incluirTecnica && !incluirCuidadora)
+      return alert("Selecione ao menos um serviço.");
+    if (!clienteInput) return alert("Informe o nome do cliente.");
 
     setLoading(true);
 
     const itensEstruturados = [];
-
     if (incluirTecnica) {
       itensEstruturados.push({
         id: crypto.randomUUID(),
@@ -200,7 +208,6 @@ export default function NovoOrcamentoModal({
         total: valores.tec24,
       });
     }
-
     if (incluirCuidadora) {
       itensEstruturados.push({
         id: crypto.randomUUID(),
@@ -219,27 +226,34 @@ export default function NovoOrcamentoModal({
     }
 
     let templateName = "proposta_v6";
-    if (incluirTecnica && !incluirCuidadora) {
-      templateName = "proposta_v6_tec";
-    } else if (!incluirTecnica && incluirCuidadora) {
+    if (incluirTecnica && !incluirCuidadora) templateName = "proposta_v6_tec";
+    else if (!incluirTecnica && incluirCuidadora)
       templateName = "proposta_v6_cuid";
+
+    let obsFinal = "";
+    if (!clienteSelecionadoId) obsFinal += `Cliente Avulso: ${clienteInput} `;
+    obsFinal += `[ETAPA: ${etapaContato}]`;
+
+    if (orcamentoParaEditar?.observacoes) {
+      const obsLimpa = orcamentoParaEditar.observacoes
+        .replace(/Cliente Avulso:.*?(?=\[|$)/, "")
+        .replace(/\[ETAPA:.*?\]/, "")
+        .trim();
+      if (obsLimpa) obsFinal += ` - ${obsLimpa}`;
     }
 
     const payload = {
       entidade_id: clienteSelecionadoId || null,
       data_emissao: formData.data_emissao,
       descricao: `Proposta Comercial ${formData.numero_orcamento} - ${clienteInput}`,
-      status: formData.status,
+      status: formData.status, // Agora o status estará correto (aprovado se fechado)
       numero_orcamento: formData.numero_orcamento,
       validade_dias: formData.validade_dias,
       previsao_inicio: formData.previsao_inicio || null,
       itens: itensEstruturados,
       valor_total: 0,
       template: templateName,
-      observacoes: !clienteSelecionadoId
-        ? `Cliente Avulso: ${clienteInput}`
-        : orcamentoParaEditar?.observacoes?.replace(/Cliente Avulso:.*$/, "") ||
-          "", 
+      observacoes: obsFinal,
     };
 
     try {
@@ -284,8 +298,62 @@ export default function NovoOrcamentoModal({
             onSubmit={handleSubmit}
             className="space-y-6"
           >
+            {/* ETAPA DO FUNIL E STATUS */}
+            <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
+              <div className="flex-1">
+                <label className="text-xs font-bold text-orange-700 uppercase mb-2 flex items-center gap-2">
+                  <MessageCircle size={14} /> Status do Contato
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    "1º Contato",
+                    "2º Contato",
+                    "Em Negociação",
+                    "Aguardando Assinatura",
+                    "Fechado",
+                  ].map((etapa) => (
+                    <button
+                      key={etapa}
+                      type="button"
+                      onClick={() => handleEtapaChange(etapa)} // Usando a nova função
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                        etapaContato === etapa
+                          ? "bg-orange-500 text-white border-orange-600 shadow-md transform scale-105"
+                          : "bg-white text-gray-600 border-orange-200 hover:bg-orange-100"
+                      }`}
+                    >
+                      {etapa}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* SELETOR MANUAL DE STATUS (Para controle total) */}
+              <div className="min-w-[150px]">
+                <label className="text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-2">
+                  <CheckCircle size={14} /> Situação Oficial
+                </label>
+                <select
+                  name="status"
+                  value={formData.status}
+                  onChange={handleChange}
+                  className={`w-full p-2 rounded-lg border text-sm font-bold outline-none ${
+                    formData.status === "aprovado"
+                      ? "bg-green-100 text-green-700 border-green-200"
+                      : formData.status === "rejeitado"
+                        ? "bg-red-100 text-red-700 border-red-200"
+                        : "bg-yellow-50 text-yellow-700 border-yellow-200"
+                  }`}
+                >
+                  <option value="pendente">Pendente</option>
+                  <option value="aprovado">Aprovado</option>
+                  <option value="rejeitado">Rejeitado</option>
+                </select>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-              {/* CLIENTE (COMBOBOX) */}
+              {/* CLIENTE */}
               <div className="md:col-span-6">
                 <label className="text-xs font-bold text-gray-500 uppercase mb-1">
                   Cliente (Selecione ou Digite)
@@ -309,13 +377,9 @@ export default function NovoOrcamentoModal({
                     ))}
                   </datalist>
                 </div>
-                {!clienteSelecionadoId && clienteInput.length > 0 && (
-                  <p className="text-[10px] text-orange-600 mt-1 ml-1">
-                    * Cliente não cadastrado (será salvo como avulso).
-                  </p>
-                )}
               </div>
 
+              {/* DATA EMISSÃO */}
               <div className="md:col-span-3">
                 <label className="text-xs font-bold text-gray-500 uppercase mb-1">
                   Data Emissão
@@ -399,7 +463,6 @@ export default function NovoOrcamentoModal({
                     Técnica de Enfermagem
                   </span>
                 </label>
-
                 <label
                   className={`flex items-center gap-2 px-4 py-3 rounded-xl border cursor-pointer transition-all ${incluirCuidadora ? "bg-purple-50 border-purple-200 ring-1 ring-purple-100" : "bg-white border-gray-200 hover:bg-gray-50"}`}
                 >
@@ -422,8 +485,8 @@ export default function NovoOrcamentoModal({
               <h3 className="text-sm font-bold text-gray-700 mb-4 uppercase flex items-center gap-2">
                 <DollarSign size={16} /> Valores das Diárias
               </h3>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* 12 HORAS */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-200">
                     <span className="w-2 h-2 rounded-full bg-blue-400"></span>
@@ -431,9 +494,8 @@ export default function NovoOrcamentoModal({
                       Plantão 12 Horas
                     </h4>
                   </div>
-
                   {incluirTecnica && (
-                    <div className="flex justify-between items-center bg-white p-3 rounded border border-gray-200 animate-in fade-in">
+                    <div className="flex justify-between items-center bg-white p-3 rounded border border-gray-200">
                       <span className="text-xs font-bold text-gray-500">
                         Técnica Enf.
                       </span>
@@ -451,7 +513,7 @@ export default function NovoOrcamentoModal({
                     </div>
                   )}
                   {incluirCuidadora && (
-                    <div className="flex justify-between items-center bg-white p-3 rounded border border-gray-200 animate-in fade-in">
+                    <div className="flex justify-between items-center bg-white p-3 rounded border border-gray-200">
                       <span className="text-xs font-bold text-gray-500">
                         Cuidadora
                       </span>
@@ -469,7 +531,7 @@ export default function NovoOrcamentoModal({
                     </div>
                   )}
                 </div>
-
+                {/* 24 HORAS */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-200">
                     <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
@@ -477,9 +539,8 @@ export default function NovoOrcamentoModal({
                       Plantão 24 Horas
                     </h4>
                   </div>
-
                   {incluirTecnica && (
-                    <div className="flex justify-between items-center bg-white p-3 rounded border border-gray-200 animate-in fade-in">
+                    <div className="flex justify-between items-center bg-white p-3 rounded border border-gray-200">
                       <span className="text-xs font-bold text-gray-500">
                         Técnica Enf.
                       </span>
@@ -496,9 +557,8 @@ export default function NovoOrcamentoModal({
                       </div>
                     </div>
                   )}
-
                   {incluirCuidadora && (
-                    <div className="flex justify-between items-center bg-white p-3 rounded border border-gray-200 animate-in fade-in">
+                    <div className="flex justify-between items-center bg-white p-3 rounded border border-gray-200">
                       <span className="text-xs font-bold text-gray-500">
                         Cuidadora
                       </span>
