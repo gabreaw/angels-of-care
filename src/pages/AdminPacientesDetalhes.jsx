@@ -1631,7 +1631,7 @@ export default function AdminPacientesDetalhes() {
 
         {activeTab === "prontuario" && (
           <div className="grid lg:grid-cols-12 gap-6 animate-in fade-in duration-500">
-            {/* FORMULÁRIO (ESQUERDA) */}
+            {/* FORMULÁRIO NOVA PRESCRIÇÃO (ESQUERDA) */}
             <div className="lg:col-span-5 bg-white rounded-2xl shadow border border-gray-200 p-6 h-fit sticky top-6">
               <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <Pill size={20} className="text-blue-600" /> Nova Prescrição
@@ -1711,6 +1711,7 @@ export default function AdminPacientesDetalhes() {
                   </div>
                 </div>
 
+                {/* PROTOCOLO SONDA (CONDICIONAL) */}
                 {medForm.via === "Sonda" && (
                   <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 space-y-3 animate-in slide-in-from-top-2">
                     <h4 className="text-xs font-bold text-orange-800 uppercase border-b border-orange-200 pb-1 mb-2">
@@ -1772,7 +1773,7 @@ export default function AdminPacientesDetalhes() {
                     </div>
                     <div>
                       <label className="text-[10px] font-bold text-orange-800 uppercase">
-                        Particularidades
+                        Particularidades da Sonda
                       </label>
                       <textarea
                         name="particularidades"
@@ -1787,14 +1788,14 @@ export default function AdminPacientesDetalhes() {
 
                 <div>
                   <label className="text-[10px] font-bold text-gray-500 uppercase mb-1 block">
-                    Observações Gerais
+                    Observações do Item (Opcional)
                   </label>
                   <textarea
                     name="observacoes"
                     value={medForm.observacoes}
                     onChange={handleMedChange}
-                    placeholder="Detalhes importantes..."
-                    className="w-full p-3 rounded-xl border border-gray-300 text-sm h-24 focus:border-blue-500 outline-none resize-none"
+                    placeholder="Detalhes específicos deste medicamento..."
+                    className="w-full p-3 rounded-xl border border-gray-300 text-sm h-20 focus:border-blue-500 outline-none resize-none"
                   />
                 </div>
 
@@ -1847,138 +1848,185 @@ export default function AdminPacientesDetalhes() {
                 </button>
               </form>
             </div>
-            <div className="lg:col-span-7 space-y-4">
-              <h3 className="text-sm font-bold text-gray-400 uppercase mt-6 mb-2">
-                Prescrições Ativas
-              </h3>
-              {medicamentos.length === 0 && (
-                <div className="text-center p-10 bg-gray-50 rounded-2xl border border-dashed border-gray-300 text-gray-400">
-                  Nenhum medicamento cadastrado.
-                </div>
-              )}
 
-              {medicamentos.map((med) => (
-                <div
-                  key={med.id}
-                  className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all group"
-                >
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex items-start gap-3">
-                      <div className="bg-blue-100 text-blue-600 p-3 rounded-xl">
-                        <Pill size={24} />
+            {/* LISTA E OBS GERAL (DIREITA) */}
+            <div className="lg:col-span-7 space-y-6">
+              {/* CAMPO DE OBSERVAÇÃO GERAL (NOVO) */}
+              <div className="bg-yellow-50 p-5 rounded-2xl border border-yellow-200">
+                <div className="flex justify-between items-center mb-2">
+                  <h4 className="text-sm font-bold text-yellow-800 flex items-center gap-2">
+                    <FileText size={16} /> Observações Gerais de Medicamentos
+                  </h4>
+                  <button
+                    onClick={async () => {
+                      // Função para salvar a observação geral no paciente
+                      // Você precisa garantir que 'observacoes_medicamentos' existe na tabela 'pacientes'
+                      try {
+                        const novaObs =
+                          document.getElementById("obs_geral_med").value;
+                        await supabase
+                          .from("pacientes")
+                          .update({ observacoes_medicamentos: novaObs })
+                          .eq("id", id);
+                        alert("Observação geral salva!");
+                      } catch (err) {
+                        alert("Erro ao salvar obs: " + err.message);
+                      }
+                    }}
+                    className="text-xs bg-yellow-100 text-yellow-800 px-3 py-1 rounded-lg font-bold hover:bg-yellow-200 border border-yellow-300"
+                  >
+                    Salvar Obs Geral
+                  </button>
+                </div>
+                <textarea
+                  id="obs_geral_med"
+                  defaultValue={paciente.observacoes_medicamentos || ""}
+                  className="w-full p-3 bg-white/80 border border-yellow-300 rounded-xl text-sm text-yellow-900 h-24 focus:outline-none focus:ring-1 focus:ring-yellow-500 resize-none placeholder:text-yellow-800/50"
+                  placeholder="Ex: Alérgico a dipirona; Cuidado com interação medicamentosa; Preferência por horários pares..."
+                ></textarea>
+              </div>
+
+              {/* LISTA DE MEDICAMENTOS */}
+              <div>
+                <h3 className="text-sm font-bold text-gray-400 uppercase mb-3">
+                  Prescrições Ativas ({medicamentos.length})
+                </h3>
+
+                {medicamentos.length === 0 && (
+                  <div className="text-center p-10 bg-gray-50 rounded-2xl border border-dashed border-gray-300 text-gray-400">
+                    Nenhum medicamento cadastrado.
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  {medicamentos.map((med) => (
+                    <div
+                      key={med.id}
+                      className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all group"
+                    >
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="flex items-start gap-3">
+                          <div className="bg-blue-100 text-blue-600 p-3 rounded-xl">
+                            <Pill size={24} />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-lg text-gray-800 leading-tight">
+                              {med.nome_medicamento}
+                            </h4>
+                            <div className="flex flex-wrap gap-2 mt-1">
+                              <span className="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                                {med.dosagem}
+                              </span>
+                              <span className="text-xs font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded">
+                                {med.frequencia}
+                              </span>
+                              <span
+                                className={`text-xs font-bold px-2 py-0.5 rounded ${med.via_administracao === "Sonda" ? "bg-orange-100 text-orange-700 border border-orange-200" : "bg-purple-50 text-purple-600"}`}
+                              >
+                                via {med.via_administracao}
+                              </span>
+                              {med.horario && (
+                                <span className="text-xs font-bold bg-yellow-50 text-yellow-700 px-2 py-0.5 rounded flex items-center gap-1">
+                                  <Clock size={10} /> {med.horario}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => deletarMedicamento(med.id)}
+                          className="text-gray-300 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 size={18} />
+                        </button>
                       </div>
-                      <div>
-                        <h4 className="font-bold text-lg text-gray-800 leading-tight">
-                          {med.nome_medicamento}
-                        </h4>
-                        <div className="flex flex-wrap gap-2 mt-1">
-                          <span className="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
-                            {med.dosagem}
-                          </span>
-                          <span className="text-xs font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded">
-                            {med.frequencia}
-                          </span>
-                          <span
-                            className={`text-xs font-bold px-2 py-0.5 rounded ${med.via_administracao === "Sonda" ? "bg-orange-100 text-orange-700 border border-orange-200" : "bg-purple-50 text-purple-600"}`}
-                          >
-                            via {med.via_administracao}
-                          </span>
-                          {med.horario && (
-                            <span className="text-xs font-bold bg-yellow-50 text-yellow-700 px-2 py-0.5 rounded flex items-center gap-1">
-                              <Clock size={10} /> {med.horario}
-                            </span>
+
+                      {med.via_administracao === "Sonda" && (
+                        <div className="bg-orange-50/50 rounded-lg p-3 mb-3 border border-orange-100 text-xs text-orange-900 grid grid-cols-2 gap-y-2 gap-x-4">
+                          <div className="font-bold col-span-2 border-b border-orange-200 pb-1 mb-1 flex items-center gap-2">
+                            <Activity size={12} /> DETALHES DA SONDA
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {med.sonda_triturar ? (
+                              <CheckSquare
+                                size={12}
+                                className="text-green-600"
+                              />
+                            ) : (
+                              <X size={12} className="text-red-400" />
+                            )}{" "}
+                            Triturar
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {med.sonda_pausar_dieta ? (
+                              <CheckSquare size={12} className="text-red-600" />
+                            ) : (
+                              <X size={12} className="text-green-400" />
+                            )}{" "}
+                            Pausar Dieta
+                          </div>
+                          {med.sonda_diluir_ml && (
+                            <div>
+                              Diluir: <b>{med.sonda_diluir_ml}ml</b>
+                            </div>
+                          )}
+                          {med.sonda_administrar_ml && (
+                            <div>
+                              Administrar: <b>{med.sonda_administrar_ml}ml</b>
+                            </div>
+                          )}
+                          {med.sonda_particularidades && (
+                            <div className="col-span-2 mt-1 bg-white p-2 rounded border border-orange-100 italic text-orange-800">
+                              <strong>Obs Sonda:</strong> "
+                              {med.sonda_particularidades}"
+                            </div>
                           )}
                         </div>
-                      </div>
-                    </div>
+                      )}
 
-                    <button
-                      onClick={() => deletarMedicamento(med.id)}
-                      className="text-gray-300 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
-
-                  {med.via_administracao === "Sonda" && (
-                    <div className="bg-orange-50/50 rounded-lg p-3 mb-3 border border-orange-100 text-xs text-orange-900 grid grid-cols-2 gap-y-2 gap-x-4">
-                      <div className="font-bold col-span-2 border-b border-orange-200 pb-1 mb-1">
-                        DETALHES DA SONDA
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {med.sonda_triturar ? (
-                          <CheckSquare size={12} className="text-green-600" />
-                        ) : (
-                          <X size={12} className="text-red-400" />
-                        )}{" "}
-                        Triturar
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {med.sonda_pausar_dieta ? (
-                          <CheckSquare size={12} className="text-red-600" />
-                        ) : (
-                          <X size={12} className="text-green-400" />
-                        )}{" "}
-                        Pausar Dieta
-                      </div>
-                      {med.sonda_diluir_ml && (
-                        <div>
-                          Diluir: <b>{med.sonda_diluir_ml}ml</b>
+                      {med.observacoes && (
+                        <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-100 mb-3 whitespace-pre-wrap">
+                          <span className="font-bold text-gray-400 text-xs block mb-1">
+                            OUTRAS OBSERVAÇÕES:
+                          </span>
+                          {med.observacoes}
                         </div>
                       )}
-                      {med.sonda_administrar_ml && (
-                        <div>
-                          Administrar: <b>{med.sonda_administrar_ml}ml</b>
-                        </div>
-                      )}
-                      {med.sonda_particularidades && (
-                        <div className="col-span-2 mt-1 bg-white p-2 rounded border border-orange-100 italic text-orange-800">
-                          "{med.sonda_particularidades}"
-                        </div>
-                      )}
+
+                      {(() => {
+                        let urls = [];
+                        try {
+                          if (med.arquivo_url) {
+                            urls = med.arquivo_url.startsWith("[")
+                              ? JSON.parse(med.arquivo_url)
+                              : [med.arquivo_url];
+                          }
+                        } catch (e) {
+                          urls = [];
+                        }
+
+                        if (urls.length > 0)
+                          return (
+                            <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-gray-100">
+                              {urls.map((url, idx) => (
+                                <a
+                                  key={idx}
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-bold flex items-center gap-2 hover:bg-blue-100 transition-colors"
+                                >
+                                  <Paperclip size={12} /> Receita {idx + 1}
+                                </a>
+                              ))}
+                            </div>
+                          );
+                      })()}
                     </div>
-                  )}
-
-                  {med.observacoes && (
-                    <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-100 mb-3 whitespace-pre-wrap">
-                      <span className="font-bold text-gray-400 text-xs block mb-1">
-                        OBSERVAÇÕES:
-                      </span>
-                      {med.observacoes}
-                    </div>
-                  )}
-
-                  {(() => {
-                    let urls = [];
-                    try {
-                      if (med.arquivo_url) {
-                        urls = med.arquivo_url.startsWith("[")
-                          ? JSON.parse(med.arquivo_url)
-                          : [med.arquivo_url];
-                      }
-                    } catch (e) {
-                      urls = [];
-                    }
-
-                    if (urls.length > 0)
-                      return (
-                        <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-gray-100">
-                          {urls.map((url, idx) => (
-                            <a
-                              key={idx}
-                              href={url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-bold flex items-center gap-2 hover:bg-blue-100 transition-colors"
-                            >
-                              <Paperclip size={12} /> Prescrição {idx + 1}
-                            </a>
-                          ))}
-                        </div>
-                      );
-                  })()}
+                  ))}
                 </div>
-              ))}
+              </div>
             </div>
           </div>
         )}
