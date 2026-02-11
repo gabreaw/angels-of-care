@@ -21,6 +21,7 @@ import {
   Filter,
   Wallet,
   PieChart as PieIcon,
+  AlertCircle,
 } from "lucide-react";
 
 const COLORS = [
@@ -32,10 +33,10 @@ const COLORS = [
   "#82ca9d",
 ];
 
-export default function Relatorios() {
+export default function Relatorios({ empresaId }) {
   const [loading, setLoading] = useState(true);
-
-  const [mesAno, setMesAno] = useState(new Date().toISOString().slice(0, 7)); 
+  const [erroApi, setErroApi] = useState(null);
+  const [mesAno, setMesAno] = useState(new Date().toISOString().slice(0, 7));
 
   const [resumo, setResumo] = useState({
     receitas: 0,
@@ -48,93 +49,94 @@ export default function Relatorios() {
   const [dadosGraficoPizza, setDadosGraficoPizza] = useState([]);
 
   useEffect(() => {
-    fetchDados();
-  }, [mesAno]);
+    console.log("Relatorios - Empresa ID recebido:", empresaId);
+
+    if (empresaId) {
+      fetchDados();
+    } else {
+      console.warn("Sem empresaId, buscando dados gerais...");
+      fetchDados();
+    }
+  }, [mesAno, empresaId]);
 
   async function fetchDados() {
     setLoading(true);
+    setErroApi(null);
 
-    const [ano, mes] = mesAno.split("-");
+    try {
+      const [ano, mes] = mesAno.split("-");
 
-    const dataInicioMes = `${ano}-${mes}-01`;
-    const ultimoDia = new Date(parseInt(ano), parseInt(mes), 0).getDate();
-    const dataFimMes = `${ano}-${mes}-${ultimoDia}`;
+      let query = supabase.from("financeiro_transacoes").select(`
+          id,
+          tipo, 
+          valor, 
+          status, 
+          data_competencia,
+          financeiro_categorias (nome)
+        `);
 
-    const { data: dadosMes, error: errorMes } = await supabase
-      .from("financeiro_transacoes")
-      .select(
-        `
-        tipo, 
-        valor, 
-        status, 
-        data_competencia,
-        data_pagamento,
-        data_vencimento,
-        financeiro_categorias (nome)
-      `,
-      );
-
-    if (errorMes) {
-      console.error(errorMes);
-      setLoading(false);
-      return;
-    }
-
-    const dadosMesFiltrados = (dadosMes || []).filter((t) => {
-      if (!t.data_competencia) return false;
-
-      const data = new Date(t.data_competencia);
-      const anoTransacao = data.getFullYear().toString();
-      const mesTransacao = (data.getMonth() + 1).toString().padStart(2, "0");
-
-      return anoTransacao === ano && mesTransacao === mes;
-    });
-
-    let totalReceitas = 0;
-    let totalDespesas = 0;
-    let totalPendente = 0;
-    const categoriasMap = {};
-
-    dadosMesFiltrados.forEach((t) => {
-      const valor = Number(t.valor);
-
-      if (t.tipo === "receita") {
-        totalReceitas += valor;
-      } else {
-        totalDespesas += valor;
-
-        const nomeCat = t.financeiro_categorias?.nome || "Sem Categoria";
-        if (!categoriasMap[nomeCat]) categoriasMap[nomeCat] = 0;
-        categoriasMap[nomeCat] += valor;
+      if (empresaId) {
+        query = query.eq("empresa_id", empresaId);
       }
 
-      if (t.status === "pendente") {
-        totalPendente += valor;
-      }
-    });
+      const { data: dados, error } = await query;
 
-    setResumo({
-      receitas: totalReceitas,
-      despesas: totalDespesas,
-      saldo: totalReceitas - totalDespesas,
-      pendente: totalPendente,
-    });
+      if (error) throw error;
 
-    const pizzaData = Object.keys(categoriasMap)
-      .map((key) => ({ name: key, value: categoriasMap[key] }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 5);
-    setDadosGraficoPizza(pizzaData);
+      const dadosMesAtual = [];
+      const dadosAnoTodo = [];
 
-    const inicioAno = `${ano}-01-01`;
-    const fimAno = `${ano}-12-31`;
+      dados.forEach((t) => {
+        if (!t.data_competencia) return;
 
-    const { data: dadosAno, error: errorAno } = await supabase
-      .from("financeiro_transacoes")
-      .select("tipo, valor, data_competencia, data_pagamento, data_vencimento");
+        const [tAno, tMes] = t.data_competencia.split("-");
 
-    if (!errorAno && dadosAno) {
-      const meses = [
+        if (tAno === ano) {
+          dadosAnoTodo.push({ ...t, mes: tMes });
+        }
+
+        if (tAno === ano && tMes === mes) {
+          dadosMesAtual.push(t);
+        }
+      });
+
+      let totalReceitas = 0;
+      let totalDespesas = 0;
+      let totalPendente = 0;
+      const categoriasMap = {};
+
+      dadosMesAtual.forEach((t) => {
+        const valor = Number(t.valor || 0);
+
+        if (t.tipo === "receita") {
+          totalReceitas += valor;
+        } else if (t.tipo === "despesa") {
+          totalDespesas += valor;
+
+          const nomeCat = t.financeiro_categorias?.nome || "Sem Categoria";
+          if (!categoriasMap[nomeCat]) categoriasMap[nomeCat] = 0;
+          categoriasMap[nomeCat] += valor;
+        }
+
+        if (t.status !== "pago") {
+          totalPendente += valor;
+        }
+      });
+
+      setResumo({
+        receitas: totalReceitas,
+        despesas: totalDespesas,
+        saldo: totalReceitas - totalDespesas,
+        pendente: totalPendente,
+      });
+
+      const pizzaData = Object.keys(categoriasMap)
+        .map((key) => ({ name: key, value: categoriasMap[key] }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 5);
+      setDadosGraficoPizza(pizzaData);
+
+      const mesesNomes = [
         "Jan",
         "Fev",
         "Mar",
@@ -149,18 +151,10 @@ export default function Relatorios() {
         "Dez",
       ];
 
-      const barraData = meses.map((nomeMes, index) => {
-        const mesNumero = index + 1;
+      const barraData = mesesNomes.map((nome, index) => {
+        const mesNumero = (index + 1).toString().padStart(2, "0");
 
-        const transacoesDoMes = (dadosAno || []).filter((t) => {
-          if (!t.data_competencia) return false;
-
-          const data = new Date(t.data_competencia);
-          const mesTransacao = data.getMonth() + 1;
-          const anoTransacao = data.getFullYear().toString();
-
-          return mesTransacao === mesNumero && anoTransacao === ano;
-        });
+        const transacoesDoMes = dadosAnoTodo.filter((t) => t.mes === mesNumero);
 
         const rec = transacoesDoMes
           .filter((t) => t.tipo === "receita")
@@ -170,34 +164,53 @@ export default function Relatorios() {
           .filter((t) => t.tipo === "despesa")
           .reduce((acc, curr) => acc + Number(curr.valor), 0);
 
-        return {
-          name: nomeMes,
-          Receitas: rec,
-          Despesas: desp,
-        };
+        return { name: nome, Receitas: rec, Despesas: desp };
       });
 
       setDadosGraficoBarra(barraData);
+    } catch (err) {
+      console.error("Erro ao buscar relatórios:", err);
+      setErroApi(err.message);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   const formatMoney = (val) =>
     new Intl.NumberFormat("pt-BR", {
       style: "currency",
       currency: "BRL",
-    }).format(val);
+    }).format(val || 0);
+
+  if (erroApi) {
+    return (
+      <div className="p-6 bg-red-50 text-red-700 rounded-xl border border-red-200 flex items-center gap-2">
+        <AlertCircle />
+        <div>
+          <p className="font-bold">Erro ao carregar dados</p>
+          <p className="text-sm">{erroApi}</p>
+          <button onClick={fetchDados} className="text-xs underline mt-1">
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-beige">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 p-1">
+      <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-200">
         <div>
-          <h2 className="text-xl font-bold text-primary flex items-center gap-2">
-            <PieIcon size={24} /> Dashboard Financeiro
+          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+            <PieIcon size={24} className="text-primary" /> Dashboard Financeiro
           </h2>
           <p className="text-sm text-gray-500">
-            Visão geral da saúde financeira do negócio.
+            Visão geral da saúde financeira.{" "}
+            {!empresaId && (
+              <span className="text-red-500 font-bold">
+                (Modo Global - Sem Empresa Selecionada)
+              </span>
+            )}
           </p>
         </div>
 
@@ -213,7 +226,7 @@ export default function Relatorios() {
           </div>
           <button
             onClick={fetchDados}
-            className="bg-primary/10 p-2 rounded-lg text-primary hover:bg-primary/20 transition-colors"
+            className="bg-gray-100 p-2 rounded-lg text-gray-600 hover:bg-gray-200 transition-colors"
             title="Atualizar dados"
           >
             <Filter size={20} />
@@ -223,87 +236,85 @@ export default function Relatorios() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4 opacity-10">
-            <TrendingUp size={60} className="text-green-600" />
+          <div className="absolute top-0 right-0 p-4 opacity-5">
+            <TrendingUp size={80} className="text-green-600" />
           </div>
           <div>
-            <p className="text-sm font-medium text-gray-500 mb-1">
-              Receita ({mesAno.split("-")[1]}/{mesAno.split("-")[0]})
+            <p className="text-sm font-bold text-gray-400 uppercase mb-1">
+              Receita
             </p>
             <h3 className="text-2xl font-bold text-green-600">
               {loading ? "..." : formatMoney(resumo.receitas)}
             </h3>
           </div>
-          <div className="mt-4 flex items-center gap-1 text-xs text-green-700 bg-green-50 w-fit px-2 py-1 rounded-full">
+          <div className="mt-4 flex items-center gap-1 text-xs text-green-700 bg-green-50 w-fit px-2 py-1 rounded-full border border-green-100">
             <TrendingUp size={12} /> Entradas do mês
           </div>
         </div>
 
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4 opacity-10">
-            <TrendingDown size={60} className="text-red-600" />
+          <div className="absolute top-0 right-0 p-4 opacity-5">
+            <TrendingDown size={80} className="text-red-600" />
           </div>
           <div>
-            <p className="text-sm font-medium text-gray-500 mb-1">
-              Despesas ({mesAno.split("-")[1]}/{mesAno.split("-")[0]})
+            <p className="text-sm font-bold text-gray-400 uppercase mb-1">
+              Despesas
             </p>
             <h3 className="text-2xl font-bold text-red-600">
               {loading ? "..." : formatMoney(resumo.despesas)}
             </h3>
           </div>
-          <div className="mt-4 flex items-center gap-1 text-xs text-red-700 bg-red-50 w-fit px-2 py-1 rounded-full">
+          <div className="mt-4 flex items-center gap-1 text-xs text-red-700 bg-red-50 w-fit px-2 py-1 rounded-full border border-red-100">
             <TrendingDown size={12} /> Saídas do mês
           </div>
         </div>
 
         <div
-          className={`p-6 rounded-2xl shadow-sm border flex flex-col justify-between relative overflow-hidden text-white ${resumo.saldo >= 0 ? "bg-primary border-primary" : "bg-red-500 border-red-500"}`}
+          className={`p-6 rounded-2xl shadow-sm border flex flex-col justify-between relative overflow-hidden text-white ${resumo.saldo >= 0 ? "bg-gradient-to-br from-blue-600 to-blue-500 border-blue-600" : "bg-gradient-to-br from-red-600 to-red-500 border-red-600"}`}
         >
-          <div className="absolute top-0 right-0 p-4 opacity-10">
-            <Wallet size={60} className="text-white" />
+          <div className="absolute top-0 right-0 p-4 opacity-20">
+            <Wallet size={80} className="text-white" />
           </div>
           <div>
-            <p className="text-sm font-medium text-white/80 mb-1">
+            <p className="text-sm font-medium text-white/80 mb-1 uppercase">
               Resultado Líquido
             </p>
-            <h3 className="text-2xl text-white font-bold">
+            <h3 className="text-3xl text-white font-bold">
               {loading ? "..." : formatMoney(resumo.saldo)}
             </h3>
           </div>
-          <div className="mt-4 flex items-center gap-1 text-xs text-white/90 bg-white/20 w-fit px-2 py-1 rounded-full">
-            <DollarSign size={12} />{" "}
-            {resumo.saldo >= 0 ? "Lucro Operacional" : "Prejuízo Operacional"}
+          <div className="mt-4 flex items-center gap-1 text-xs text-white/90 bg-white/20 w-fit px-2 py-1 rounded-full border border-white/10">
+            <DollarSign size={12} /> {resumo.saldo >= 0 ? "Lucro" : "Prejuízo"}
           </div>
         </div>
 
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4 opacity-10">
-            <Calendar size={60} className="text-orange-500" />
+          <div className="absolute top-0 right-0 p-4 opacity-5">
+            <Calendar size={80} className="text-orange-500" />
           </div>
           <div>
-            <p className="text-sm font-medium text-gray-500 mb-1">
-              Em Aberto (Mês Atual)
+            <p className="text-sm font-bold text-gray-400 uppercase mb-1">
+              Pendente (Geral)
             </p>
             <h3 className="text-2xl font-bold text-orange-500">
               {loading ? "..." : formatMoney(resumo.pendente)}
             </h3>
           </div>
-          <div className="mt-4 flex items-center gap-1 text-xs text-orange-700 bg-orange-50 w-fit px-2 py-1 rounded-full">
-            <Calendar size={12} /> Pendente neste mês
+          <div className="mt-4 flex items-center gap-1 text-xs text-orange-700 bg-orange-50 w-fit px-2 py-1 rounded-full border border-orange-100">
+            <Calendar size={12} /> A Receber ou Pagar
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Gráfico de Barras - Dados Anuais */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-beige">
+        <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
           <h3 className="text-lg font-bold text-gray-800 mb-6">
             Fluxo de Caixa ({mesAno.split("-")[0]})
           </h3>
           <div className="h-[300px] w-full">
             {loading ? (
               <div className="h-full flex items-center justify-center text-gray-400">
-                Carregando gráfico...
+                Carregando...
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -314,40 +325,40 @@ export default function Relatorios() {
                   <CartesianGrid
                     strokeDasharray="3 3"
                     vertical={false}
-                    stroke="#eee"
+                    stroke="#f0f0f0"
                   />
                   <XAxis
                     dataKey="name"
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: "#888", fontSize: 12 }}
+                    tick={{ fill: "#9ca3af", fontSize: 12 }}
                   />
                   <YAxis
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: "#888", fontSize: 12 }}
-                    tickFormatter={(val) => `R$${val / 1000}k`}
+                    tick={{ fill: "#9ca3af", fontSize: 12 }}
+                    tickFormatter={(val) => `k${val / 1000}`}
                   />
                   <Tooltip
                     formatter={(value) => formatMoney(value)}
                     contentStyle={{
                       borderRadius: "12px",
                       border: "none",
-                      boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                      boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)",
                     }}
                   />
-                  <Legend />
+                  <Legend wrapperStyle={{ paddingTop: "20px" }} />
                   <Bar
                     dataKey="Receitas"
-                    fill="#16a34a"
+                    fill="#10b981"
                     radius={[4, 4, 0, 0]}
-                    barSize={20}
+                    barSize={30}
                   />
                   <Bar
                     dataKey="Despesas"
-                    fill="#dc2626"
+                    fill="#ef4444"
                     radius={[4, 4, 0, 0]}
-                    barSize={20}
+                    barSize={30}
                   />
                 </BarChart>
               </ResponsiveContainer>
@@ -355,21 +366,22 @@ export default function Relatorios() {
           </div>
         </div>
 
-        <div className="lg:col-span-1 bg-white p-6 rounded-2xl shadow-sm border border-beige">
+        <div className="lg:col-span-1 bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
           <h3 className="text-lg font-bold text-gray-800 mb-2">
-            Despesas ({mesAno.split("-")[1]}/{mesAno.split("-")[0]})
+            Despesas por Categoria
           </h3>
           <p className="text-xs text-gray-400 mb-6">
-            Top 5 maiores gastos deste mês
+            Top 5 gastos em {mesAno.split("-")[1]}/{mesAno.split("-")[0]}
           </p>
           <div className="h-[300px] w-full relative">
             {loading ? (
               <div className="h-full flex items-center justify-center text-gray-400">
-                Carregando gráfico...
+                Carregando...
               </div>
             ) : dadosGraficoPizza.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-gray-400 text-sm">
-                Sem dados de despesa este mês.
+              <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                <PieIcon size={32} className="mb-2 opacity-50" />
+                Sem despesas registradas.
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
