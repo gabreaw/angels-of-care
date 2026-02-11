@@ -1631,7 +1631,6 @@ export default function AdminPacientesDetalhes() {
 
         {activeTab === "prontuario" && (
           <div className="grid lg:grid-cols-12 gap-6 animate-in fade-in duration-500">
-            {/* FORMULÁRIO NOVA PRESCRIÇÃO (ESQUERDA) */}
             <div className="lg:col-span-5 bg-white rounded-2xl shadow border border-gray-200 p-6 h-fit sticky top-6">
               <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <Pill size={20} className="text-blue-600" /> Nova Prescrição
@@ -1710,8 +1709,6 @@ export default function AdminPacientesDetalhes() {
                     </select>
                   </div>
                 </div>
-
-                {/* PROTOCOLO SONDA (CONDICIONAL) */}
                 {medForm.via === "Sonda" && (
                   <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 space-y-3 animate-in slide-in-from-top-2">
                     <h4 className="text-xs font-bold text-orange-800 uppercase border-b border-orange-200 pb-1 mb-2">
@@ -1848,10 +1845,7 @@ export default function AdminPacientesDetalhes() {
                 </button>
               </form>
             </div>
-
-            {/* LISTA E OBS GERAL (DIREITA) */}
             <div className="lg:col-span-7 space-y-6">
-              {/* CAMPO DE OBSERVAÇÃO GERAL (NOVO) */}
               <div className="bg-yellow-50 p-5 rounded-2xl border border-yellow-200">
                 <div className="flex justify-between items-center mb-2">
                   <h4 className="text-sm font-bold text-yellow-800 flex items-center gap-2">
@@ -1859,8 +1853,6 @@ export default function AdminPacientesDetalhes() {
                   </h4>
                   <button
                     onClick={async () => {
-                      // Função para salvar a observação geral no paciente
-                      // Você precisa garantir que 'observacoes_medicamentos' existe na tabela 'pacientes'
                       try {
                         const novaObs =
                           document.getElementById("obs_geral_med").value;
@@ -1885,8 +1877,6 @@ export default function AdminPacientesDetalhes() {
                   placeholder="Ex: Alérgico a dipirona; Cuidado com interação medicamentosa; Preferência por horários pares..."
                 ></textarea>
               </div>
-
-              {/* LISTA DE MEDICAMENTOS */}
               <div>
                 <h3 className="text-sm font-bold text-gray-400 uppercase mb-3">
                   Prescrições Ativas ({medicamentos.length})
