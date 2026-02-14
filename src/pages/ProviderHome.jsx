@@ -53,6 +53,14 @@ export default function ProviderHome() {
         .toISOString()
         .split("T")[0];
 
+      const ontemDate = new Date(agora);
+      ontemDate.setDate(ontemDate.getDate() - 1);
+      const ontem = new Date(
+        ontemDate.getTime() - ontemDate.getTimezoneOffset() * 60000,
+      )
+        .toISOString()
+        .split("T")[0];
+
       const horaAtual = agora.toLocaleTimeString("pt-BR", {
         hour: "2-digit",
         minute: "2-digit",
@@ -71,28 +79,45 @@ export default function ProviderHome() {
         `,
         )
         .eq("funcionario_id", func.id)
-        .gte("data_plantao", hoje)
+        .gte("data_plantao", ontem) 
         .neq("status", "cancelado")
         .order("data_plantao", { ascending: true })
         .order("horario_inicio", { ascending: true });
 
       if (plantoes && plantoes.length > 0) {
-        const active = plantoes.find(
-          (p) =>
-            p.data_plantao === hoje &&
-            p.horario_inicio <= horaAtual &&
-            p.horario_fim > horaAtual,
-        );
+        const active = plantoes.find((p) => {
+          const isHoje = p.data_plantao === hoje;
+          const isOntem = p.data_plantao === ontem;
+          const cruzaMeiaNoite = p.horario_fim < p.horario_inicio;
+
+          if (isHoje) {
+            if (cruzaMeiaNoite) {
+              return p.horario_inicio <= horaAtual;
+            } else {
+              return p.horario_inicio <= horaAtual && p.horario_fim > horaAtual;
+            }
+          }
+
+          if (isOntem && cruzaMeiaNoite) {
+            return horaAtual < p.horario_fim;
+          }
+
+          return false;
+        });
+
         setPlantaoAtivo(active || null);
 
         const next = plantoes.find((p) => {
-          if (active && p.id === active.id) return false;
+          if (active && p.id === active.id) return false; 
 
-          if (p.data_plantao > hoje) return true; 
-          if (p.data_plantao === hoje && p.horario_inicio > horaAtual)
-            return true; 
-          return false;
+          if (p.data_plantao < hoje) return false;
+
+          if (p.data_plantao === hoje) {
+            return p.horario_inicio > horaAtual;
+          }
+          return true;
         });
+
         setProximoPlantao(next || null);
 
         const pacientesMap = new Map();
