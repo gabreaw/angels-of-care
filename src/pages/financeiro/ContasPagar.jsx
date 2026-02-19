@@ -16,6 +16,7 @@ import {
   ChevronDown,
   ChevronUp,
   X,
+  CalendarDays,
 } from "lucide-react";
 
 export default function ContasPagar() {
@@ -23,7 +24,11 @@ export default function ContasPagar() {
   const [filteredTransacoes, setFilteredTransacoes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterMonth, setFilterMonth] = useState(false);
+
+  const [selectedMonth, setSelectedMonth] = useState(
+    new Date().toISOString().slice(0, 7),
+  );
+
   const [modalOpen, setModalOpen] = useState(false);
   const [itemParaEditar, setItemParaEditar] = useState(null);
   const [expandedRows, setExpandedRows] = useState({});
@@ -43,15 +48,16 @@ export default function ContasPagar() {
 
   useEffect(() => {
     applyFilters();
-  }, [transacoes, searchTerm, filterMonth]);
+  }, [transacoes, searchTerm, selectedMonth]);
 
   async function fetchTransacoes() {
     setLoading(true);
     const { data, error } = await supabase
       .from("financeiro_transacoes")
       .select(`*, financeiro_categorias (nome), financeiro_entidades (nome)`)
-      .eq("tipo", "despesa")
-      .order("data_competencia", { ascending: true });
+      .or("tipo.eq.despesa,tipo.eq.saida")
+      .order("data_vencimento", { ascending: true });
+
     if (error) console.error(error);
     else {
       setTransacoes(data || []);
@@ -61,26 +67,22 @@ export default function ContasPagar() {
 
   function applyFilters() {
     let result = transacoes;
+
+    if (selectedMonth) {
+      result = result.filter((item) => {
+        if (!item.data_vencimento) return false;
+        return item.data_vencimento.startsWith(selectedMonth);
+      });
+    }
+
     if (searchTerm) {
       const lowerTerm = searchTerm.toLowerCase();
       result = result.filter(
         (item) =>
           item.descricao?.toLowerCase().includes(lowerTerm) ||
           item.financeiro_entidades?.nome?.toLowerCase().includes(lowerTerm) ||
-          item.financeiro_categorias?.nome?.toLowerCase().includes(lowerTerm)
+          item.financeiro_categorias?.nome?.toLowerCase().includes(lowerTerm),
       );
-    }
-
-    if (filterMonth) {
-      const today = new Date();
-      const currentMonth = today.getMonth();
-      const currentYear = today.getFullYear();
-
-      result = result.filter((item) => {
-        if (!item.data_vencimento) return false;
-        const [year, month, day] = item.data_vencimento.split("-").map(Number);
-        return month - 1 === currentMonth && year === currentYear;
-      });
     }
 
     setFilteredTransacoes(result);
@@ -108,35 +110,25 @@ export default function ContasPagar() {
     });
     setResumo({ vencidos: v, hoje: h, aVencer: av, pago: p, total: t });
   }
-  function groupTransactionsByMonth(transactions) {
-    const groups = {};
 
-    transactions.forEach((item) => {
-      if (!item.data_vencimento) return;
-      const monthKey = item.data_vencimento.slice(0, 7);
+  const generateMonthOptions = () => {
+    const options = [];
+    const date = new Date();
+    date.setMonth(date.getMonth() - 6);
 
-      if (!groups[monthKey]) {
-        groups[monthKey] = {
-          items: [],
-          total: 0,
-        };
-      }
-      groups[monthKey].items.push(item);
-      groups[monthKey].total += Number(item.valor);
-    });
-
-    return Object.keys(groups)
-      .sort()
-      .map((key) => ({
-        key,
-        ...groups[key],
-      }));
-  }
-
-  const formatMonthTitle = (dateKey) => {
-    const [year, month] = dateKey.split("-");
-    const date = new Date(year, month - 1);
-    return date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+    for (let i = 0; i < 13; i++) {
+      const value = date.toISOString().slice(0, 7);
+      const label = date.toLocaleDateString("pt-BR", {
+        month: "long",
+        year: "numeric",
+      });
+      options.push({
+        value,
+        label: label.charAt(0).toUpperCase() + label.slice(1),
+      });
+      date.setMonth(date.getMonth() + 1);
+    }
+    return options;
   };
 
   const handleNovaDespesa = () => {
@@ -166,11 +158,10 @@ export default function ContasPagar() {
     if (item.status === "pago") {
       if (
         !window.confirm(
-          "Deseja reabrir esta conta? O pagamento será estornado."
+          "Deseja reabrir esta conta? O pagamento será estornado.",
         )
       )
         return;
-
       const { error } = await supabase
         .from("financeiro_transacoes")
         .update({
@@ -182,7 +173,6 @@ export default function ContasPagar() {
           desconto: 0,
         })
         .eq("id", item.id);
-
       if (error) alert("Erro: " + error.message);
       else fetchTransacoes();
     } else {
@@ -200,26 +190,44 @@ export default function ContasPagar() {
       style: "currency",
       currency: "BRL",
     }).format(val);
+
   const formatDate = (dateStr) => {
     if (!dateStr) return "-";
     const [year, month, day] = dateStr.split("-");
     return `${day}/${month}/${year}`;
   };
 
-  const groupedTransactions = groupTransactionsByMonth(filteredTransacoes);
-
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-8">
         <h2 className="text-xl font-bold text-gray-700">Contas a Pagar</h2>
-        <button
-          onClick={handleNovaDespesa}
-          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 shadow-md transition-all text-sm"
-        >
-          <Plus size={18} /> Nova Despesa
-        </button>
+        <div className="flex items-center gap-3">
+          {/* NOVO SELETOR DE MÊS */}
+          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-100 transition-all">
+            <CalendarDays size={18} className="text-blue-600" />
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="bg-transparent outline-none text-sm font-bold text-gray-700 cursor-pointer"
+            >
+              {generateMonthOptions().map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            onClick={handleNovaDespesa}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 shadow-md transition-all text-sm"
+          >
+            <Plus size={18} /> Nova Despesa
+          </button>
+        </div>
       </div>
 
+      {/* Cards de Resumo */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
         <SummaryCard
           label="Vencidos"
@@ -247,7 +255,7 @@ export default function ContasPagar() {
         />
         <div className="p-4 rounded-xl border border-gray-200 bg-gray-50 flex flex-col justify-center">
           <span className="text-xs text-gray-500 font-bold uppercase mb-1">
-            Total (Filtro)
+            Total Mês
           </span>
           <span className="text-lg font-bold text-gray-800">
             {formatMoney(resumo.total)}
@@ -255,6 +263,7 @@ export default function ContasPagar() {
         </div>
       </div>
 
+      {/* Barra de Busca */}
       <div className="flex gap-3 mb-6">
         <div className="flex-1 bg-gray-50 rounded-lg flex items-center px-4 border border-gray-200 focus-within:border-blue-400 transition-colors">
           <Search size={18} className="text-gray-400 mr-2" />
@@ -276,24 +285,14 @@ export default function ContasPagar() {
         </div>
 
         <button
-          onClick={() => setFilterMonth(!filterMonth)}
-          className={`flex items-center gap-2 px-4 py-2 border rounded-lg text-sm font-bold transition-all ${
-            filterMonth
-              ? "bg-blue-50 border-blue-200 text-blue-600"
-              : "border-gray-200 text-gray-600 hover:bg-gray-50"
-          }`}
+          onClick={() => setSelectedMonth(new Date().toISOString().slice(0, 7))}
+          className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all"
         >
-          <CalIcon size={16} /> Este Mês
-        </button>
-
-        <button
-          className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 opacity-50 cursor-not-allowed"
-          title="Em breve"
-        >
-          <Filter size={16} /> Filtros
+          Mês Atual
         </button>
       </div>
 
+      {/* Tabela */}
       <div className="overflow-hidden rounded-lg border border-gray-200 shadow-sm bg-white">
         <table className="w-full text-left border-collapse">
           <thead className="bg-gray-50">
@@ -314,195 +313,185 @@ export default function ContasPagar() {
                   Carregando...
                 </td>
               </tr>
-            ) : groupedTransactions.length === 0 ? (
+            ) : filteredTransacoes.length === 0 ? (
               <tr>
-                <td
-                  colSpan="7"
-                  className="p-12 text-center text-gray-400 border-dashed border-2 border-gray-100 rounded-lg"
-                >
-                  Nenhuma conta encontrada para este filtro.
+                <td colSpan="7" className="p-12 text-center text-gray-400">
+                  Nenhuma conta encontrada para o período selecionado.
                 </td>
               </tr>
             ) : (
-              groupedTransactions.map((group) => (
-                <React.Fragment key={group.key}>
-                  <tr className="bg-gray-100 border-y border-gray-200">
-                    <td colSpan="7" className="p-2 px-4">
-                      <div className="flex justify-between items-center">
-                        <span className="font-bold text-gray-600 text-xs uppercase tracking-wide">
-                          {formatMonthTitle(group.key)}
+              filteredTransacoes.map((item) => (
+                <React.Fragment key={item.id}>
+                  <tr
+                    onClick={() => toggleRow(item.id)}
+                    className={`border-b border-gray-50 hover:bg-blue-50/30 transition-colors group cursor-pointer ${
+                      expandedRows[item.id] ? "bg-blue-50/50" : ""
+                    }`}
+                  >
+                    <td className="p-4 font-mono text-gray-600 text-xs">
+                      {formatDate(item.data_vencimento)}
+                      {item.status !== "pago" &&
+                        item.data_vencimento <
+                          new Date().toISOString().split("T")[0] && (
+                          <span
+                            className="ml-2 text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold"
+                            title="Vencido"
+                          >
+                            !
+                          </span>
+                        )}
+                    </td>
+                    <td className="p-4 text-xs">
+                      {item.status === "pago" && item.data_pagamento ? (
+                        <span className="text-green-600 font-bold">
+                          {formatDate(item.data_pagamento.split("T")[0])}
                         </span>
-                        <span className="text-xs font-bold text-gray-500">
-                          Total: {formatMoney(group.total)}
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
+                    <td className="p-4">
+                      <div className="flex items-center gap-2">
+                        {expandedRows[item.id] ? (
+                          <ChevronUp size={14} className="text-gray-400" />
+                        ) : (
+                          <ChevronDown size={14} className="text-gray-400" />
+                        )}
+                        <div>
+                          <p className="font-bold text-gray-800 text-sm">
+                            {item.descricao}
+                          </p>
+                          {item.financeiro_entidades && (
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              {item.financeiro_entidades.nome}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      {item.financeiro_categorias ? (
+                        <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs font-medium border border-gray-200">
+                          {item.financeiro_categorias.nome}
                         </span>
+                      ) : (
+                        <span className="text-gray-300 text-xs">-</span>
+                      )}
+                    </td>
+                    <td className="p-4 text-right font-bold text-gray-700">
+                      {formatMoney(item.valor)}
+                    </td>
+                    <td className="p-4 text-center">
+                      <StatusBadge status={item.status} />
+                    </td>
+                    <td className="p-4">
+                      <div className="flex justify-center gap-1">
+                        <button
+                          onClick={(e) => handleToggleStatus(item, e)}
+                          className={`p-1.5 rounded-md border transition-all ${
+                            item.status === "pago"
+                              ? "bg-white text-gray-400 border-gray-200 hover:text-orange-500"
+                              : "bg-green-50 text-green-600 border-green-200 hover:bg-green-100"
+                          }`}
+                        >
+                          {item.status === "pago" ? (
+                            <XCircle size={16} />
+                          ) : (
+                            <CheckCircle size={16} />
+                          )}
+                        </button>
+                        <button
+                          onClick={(e) => handleEditar(item, e)}
+                          className="p-1.5 bg-white border border-gray-200 text-blue-600 rounded-md hover:bg-blue-50 transition-all"
+                        >
+                          <Edit size={16} />
+                        </button>
+                        <button
+                          onClick={(e) => handleDelete(item.id, e)}
+                          className="p-1.5 bg-white border border-gray-200 text-red-500 rounded-md hover:bg-red-50 transition-all"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     </td>
                   </tr>
-                  {group.items.map((item) => (
-                    <React.Fragment key={item.id}>
-                      <tr
-                        onClick={() => toggleRow(item.id)}
-                        className={`border-b border-gray-50 hover:bg-blue-50/30 transition-colors group cursor-pointer ${
-                          expandedRows[item.id] ? "bg-blue-50/50" : ""
-                        }`}
-                      >
-                        <td className="p-4 font-mono text-gray-600 text-xs">
-                          {formatDate(item.data_vencimento)}
-                          {item.status !== "pago" &&
-                            item.data_vencimento <
-                              new Date().toISOString().split("T")[0] && (
-                              <span
-                                className="ml-2 text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold"
-                                title="Vencido"
-                              >
-                                !
-                              </span>
-                            )}
-                        </td>
-                        <td className="p-4 text-xs">
-                          {item.status === "pago" && item.data_pagamento ? (
-                            <span className="text-green-600 font-bold">
-                              {formatDate(item.data_pagamento.split("T")[0])}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="p-4">
-                          <div className="flex items-center gap-2">
-                            {expandedRows[item.id] ? (
-                              <ChevronUp size={14} className="text-gray-400" />
-                            ) : (
-                              <ChevronDown
-                                size={14}
-                                className="text-gray-400"
-                              />
-                            )}
-                            <div>
-                              <p className="font-bold text-gray-800 text-sm">
-                                {item.descricao}
-                              </p>
-                              {item.financeiro_entidades && (
-                                <p className="text-xs text-gray-500 mt-0.5">
-                                  {item.financeiro_entidades.nome}
-                                </p>
-                              )}
-                            </div>
+                  {expandedRows[item.id] && (
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <td colSpan="7" className="p-4 px-8">
+                        <div className="grid grid-cols-4 gap-6 text-sm">
+                          <div>
+                            <p className="text-xs font-bold text-gray-400 uppercase">
+                              Centro de Custo
+                            </p>
+                            <p className="text-gray-700 capitalize">
+                              {item.centro_custo || "-"}
+                            </p>
                           </div>
-                        </td>
-                        <td className="p-4">
-                          {item.financeiro_categorias ? (
-                            <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs font-medium border border-gray-200">
-                              {item.financeiro_categorias.nome}
-                            </span>
-                          ) : (
-                            <span className="text-gray-300 text-xs">-</span>
-                          )}
-                        </td>
-                        <td className="p-4 text-right font-bold text-gray-700">
-                          {formatMoney(item.valor)}
-                        </td>
-                        <td className="p-4 text-center">
-                          <StatusBadge status={item.status} />
-                        </td>
+                          <div>
+                            <p className="text-xs font-bold text-gray-400 uppercase">
+                              Competência
+                            </p>
+                            <p className="text-gray-700">
+                              {formatDate(item.data_competencia)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-gray-400 uppercase">
+                              Forma Pagto
+                            </p>
+                            <p className="text-gray-700 capitalize">
+                              {item.forma_pagamento || "-"}
+                            </p>
+                          </div>
+                          <div className="col-span-1">
+                            {item.anexo_url ? (
+                              (() => {
+                                try {
+                                  // Tenta converter o que vem do banco (JSON) para objeto JS
+                                  const anexos =
+                                    typeof item.anexo_url === "string"
+                                      ? JSON.parse(item.anexo_url)
+                                      : item.anexo_url;
 
-                        <td className="p-4">
-                          <div className="flex justify-center gap-1">
-                            <button
-                              onClick={(e) => handleToggleStatus(item, e)}
-                              className={`p-1.5 rounded-md border transition-all ${
-                                item.status === "pago"
-                                  ? "bg-white text-gray-400 border-gray-200 hover:text-orange-500"
-                                  : "bg-green-50 text-green-600 border-green-200 hover:bg-green-100"
-                              }`}
-                              title={
-                                item.status === "pago" ? "Reabrir" : "Pagar"
-                              }
-                            >
-                              {item.status === "pago" ? (
-                                <XCircle size={16} />
-                              ) : (
-                                <CheckCircle size={16} />
-                              )}
-                            </button>
-                            <button
-                              onClick={(e) => handleEditar(item, e)}
-                              className="p-1.5 bg-white border border-gray-200 text-blue-600 rounded-md hover:bg-blue-50 transition-all"
-                              title="Editar"
-                            >
-                              <Edit size={16} />
-                            </button>
-                            <button
-                              onClick={(e) => handleDelete(item.id, e)}
-                              className="p-1.5 bg-white border border-gray-200 text-red-500 rounded-md hover:bg-red-50 transition-all"
-                              title="Excluir"
-                            >
-                              <Trash2 size={16} />
-                            </button>
+                                  // Pega a URL do primeiro item do array
+                                  const urlFinal =
+                                    Array.isArray(anexos) && anexos.length > 0
+                                      ? anexos[0].url
+                                      : anexos;
+
+                                  return (
+                                    <a
+                                      href={urlFinal}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-2 text-blue-600 hover:underline mt-2 font-bold"
+                                    >
+                                      <Paperclip size={14} /> Ver Comprovante
+                                    </a>
+                                  );
+                                } catch (e) {
+                                  return (
+                                    <a
+                                      href={item.anexo_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-2 text-blue-600 hover:underline mt-2 font-bold"
+                                    >
+                                      <Paperclip size={14} /> Ver Comprovante
+                                    </a>
+                                  );
+                                }
+                              })()
+                            ) : (
+                              <p className="text-xs text-gray-400 italic mt-2">
+                                Sem anexo.
+                              </p>
+                            )}
                           </div>
-                        </td>
-                      </tr>
-                      {expandedRows[item.id] && (
-                        <tr className="bg-gray-50 border-b border-gray-200">
-                          <td colSpan="7" className="p-4 px-8">
-                            <div className="grid grid-cols-4 gap-6 text-sm">
-                              <div>
-                                <p className="text-xs font-bold text-gray-400 uppercase">
-                                  Centro de Custo
-                                </p>
-                                <p className="text-gray-700 capitalize">
-                                  {item.centro_custo || "-"}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-xs font-bold text-gray-400 uppercase">
-                                  Competência
-                                </p>
-                                <p className="text-gray-700">
-                                  {formatDate(item.data_competencia)}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-xs font-bold text-gray-400 uppercase">
-                                  Forma Pagto
-                                </p>
-                                <p className="text-gray-700 capitalize">
-                                  {item.forma_pagamento || "-"}
-                                </p>
-                              </div>
-                              <div className="col-span-1">
-                                {item.anexo_url ? (
-                                  <a
-                                    href={item.anexo_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-2 text-blue-600 hover:underline mt-2"
-                                  >
-                                    <Paperclip size={14} /> Ver
-                                    Comprovante/Anexo
-                                  </a>
-                                ) : (
-                                  <p className="text-xs text-gray-400 italic mt-2">
-                                    Sem anexo.
-                                  </p>
-                                )}
-                              </div>
-                              {item.observacoes && (
-                                <div className="col-span-4 mt-2 p-3 bg-white border border-gray-200 rounded-lg">
-                                  <p className="text-xs font-bold text-gray-400 uppercase mb-1">
-                                    Observações
-                                  </p>
-                                  <p className="text-gray-600 italic">
-                                    {item.observacoes}
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  ))}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
                 </React.Fragment>
               ))
             )}
@@ -514,9 +503,7 @@ export default function ContasPagar() {
         <NovaDespesaModal
           onClose={() => setModalOpen(false)}
           despesaParaEditar={itemParaEditar}
-          onSuccess={() => {
-            fetchTransacoes();
-          }}
+          onSuccess={() => fetchTransacoes()}
         />
       )}
       {showPaymentModal && paymentItem && (
@@ -559,9 +546,7 @@ function StatusBadge({ status }) {
   const labels = { pago: "Pago", pendente: "Aberto" };
   return (
     <span
-      className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${
-        styles[status] || styles.pendente
-      }`}
+      className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${styles[status] || styles.pendente}`}
     >
       {labels[status] || status}
     </span>
